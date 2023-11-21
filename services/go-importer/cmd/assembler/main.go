@@ -154,8 +154,12 @@ func main() {
 	defer util.Run()()
 
 	flag.Parse()
-	if flag.NArg() < 1 && *watch_dir == "" {
-		log.Fatal("Usage: ./go-importer <file0.pcap> ... <fileN.pcap>")
+	if flag.NArg() < 1 && *watch_dir == "" && *pcap_over_ip == "" {
+		log.Fatal("Usage: \n" +
+			"\t./go-importer <file0.pcap> ... <fileN.pcap> OR" +
+			"\t./go-importer --dir <watch_dir> OR" +
+			"\t./go-importer --pcap-over-ip <host:port>",
+		)
 	}
 
 	// DELAY for testing
