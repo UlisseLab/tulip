@@ -25,7 +25,7 @@ Tulip was developed by Team Europe for use in the first International Cyber Secu
 
 ## Configuration
 
-Before starting the stack, edit `services/configurations.py`:
+Before starting the stack, edit `services/api/configurations.py`:
 
 ```python
 vm_ip = "10.60.4.1"
