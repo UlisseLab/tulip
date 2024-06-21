@@ -1,10 +1,13 @@
-FROM golang:1.21-alpine
-
-COPY . /app
-
-WORKDIR /app
-
+FROM golang:1.21-alpine AS builder
 RUN apk add --no-cache git make build-base libpcap-dev
 
-RUN go mod download
+WORKDIR /build
+COPY . .
+
 RUN go build ./cmd/assembler
+
+FROM alpine:3.9
+RUN apk add --no-cache libpcap-dev
+WORKDIR /app
+COPY --from=builder /build/assembler ./
+CMD ["./assembler"]

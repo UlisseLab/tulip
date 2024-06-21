@@ -1,8 +1,13 @@
-FROM golang:1.21-alpine
+FROM golang:1.21-alpine AS builder
+WORKDIR /build
 
-COPY . /app
+COPY . .
 
-WORKDIR /app
-
-RUN go mod download
 RUN go build ./cmd/enricher
+
+FROM alpine:3.12
+WORKDIR /app
+COPY --from=builder /build/enricher .
+
+CMD ["./enricher"]
+
