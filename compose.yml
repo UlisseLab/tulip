@@ -1,12 +1,9 @@
-version: "3.2"
 services:
   mongo:
     image: mongo:5
-    networks:
-      - internal
     restart: always
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017" # Only expose to localhost
 
   frontend:
     build:
@@ -16,11 +13,11 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+
     depends_on:
       - mongo
       - api
-    networks:
-      - internal
+
     environment:
       API_SERVER_ENDPOINT: http://api:5000/
 
@@ -28,14 +25,16 @@ services:
     build:
       context: services/api
       dockerfile: Dockerfile-api
+
     image: tulip-api:latest
     restart: unless-stopped
+
     depends_on:
       - mongo
-    networks:
-      - internal
+
     volumes:
       - ${TRAFFIC_DIR_HOST}:${TRAFFIC_DIR_DOCKER}:ro
+
     environment:
       TULIP_MONGO: ${TULIP_MONGO}
       TULIP_TRAFFIC_DIR: ${TRAFFIC_DIR_DOCKER}
@@ -49,10 +48,10 @@ services:
     build:
       context: services/flagids
     image: tulip-flagids:latest
+
     depends_on:
       - mongo
-    networks:
-      - internal
+
     environment:
       TULIP_MONGO: ${TULIP_MONGO}
       TICK_START: ${TICK_START}
@@ -67,13 +66,15 @@ services:
       target: assembler
     image: tulip-assembler:latest
     restart: unless-stopped
+
     depends_on:
       - mongo
-    networks:
-      - internal
+
     volumes:
       - ${TRAFFIC_DIR_HOST}:${TRAFFIC_DIR_DOCKER}:ro
+
     command: "./assembler -dir ${TRAFFIC_DIR_DOCKER}"
+
     environment:
       TULIP_MONGO: ${TULIP_MONGO}
       FLAG_REGEX: ${FLAG_REGEX}
@@ -81,9 +82,9 @@ services:
       FLAGID_SCAN: ${FLAGID_SCAN}
       FLAG_LIFETIME: ${FLAG_LIFETIME}
       PCAP_OVER_IP: ${PCAP_OVER_IP}
+
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
 
   enricher:
     build:
@@ -93,13 +94,22 @@ services:
     restart: unless-stopped
     depends_on:
       - mongo
-    networks:
-      - internal
     volumes:
-      - ${TRAFFIC_DIR_HOST}:${TRAFFIC_DIR_DOCKER}:ro
-    command: "./enricher -eve ${TRAFFIC_DIR_DOCKER}/eve.json"
+      - suricata_logs:/suricata
+    command: "./enricher -eve /suricata/eve.json"
     environment:
       TULIP_MONGO: ${TULIP_MONGO}
 
-networks:
-  internal:
+  suricata:
+    build: services/suricata
+    restart: unless-stopped
+    volumes:
+      - suricata_logs:/suricata
+      - ./services/suricata/suricata.rules:/var/lib/suricata/rules/suricata.rules:ro
+    environment:
+      PCAP_OVER_IP: ${PCAP_OVER_IP}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  suricata_logs:
