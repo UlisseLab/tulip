@@ -1,6 +1,6 @@
 import { format, parse } from "date-fns";
 import { Suspense, useState } from "react";
-import { useHotkeys } from 'react-hotkeys-hook';
+import { useHotkeys } from "react-hotkeys-hook";
 import {
   Link,
   useParams,
@@ -45,6 +45,8 @@ function ServiceSelection() {
   let [searchParams, setSearchParams] = useSearchParams();
   return (
     <select
+      className="w-20"
+      title="Service"
       value={searchParams.get(FILTER_KEY) ?? ""}
       onChange={(event) => {
         let serviceFilter = event.target.value;
@@ -68,11 +70,11 @@ function ServiceSelection() {
 function TextSearch() {
   const FILTER_KEY = TEXT_FILTER_KEY;
   let [searchParams, setSearchParams] = useSearchParams();
-  useHotkeys('s', (e) => {
-    let el = document.getElementById('search') as HTMLInputElement;
+  useHotkeys("s", (e) => {
+    let el = document.getElementById("search") as HTMLInputElement;
     el?.focus();
     el?.select();
-    e.preventDefault()
+    e.preventDefault();
   });
   return (
     <div>
@@ -310,7 +312,7 @@ function Diff() {
     <button
       className=" bg-amber-100 text-gray-800 rounded-md px-2 py-1"
       onClick={() => {
-        navigateToDiff()
+        navigateToDiff();
       }}
     >
       Diff
@@ -318,14 +320,18 @@ function Diff() {
   );
 }
 
+import ulisseImg from "../../assets/Logo_60.png";
+
 export function Header() {
   let [searchParams] = useSearchParams();
   const { setToLastnTicks, currentTick, setTimeParam } = useMessyTimeStuff();
 
-  useHotkeys('a', () => setToLastnTicks(5));
-  useHotkeys('c', () => {
-    (document.getElementById("startdateselection") as HTMLInputElement).value = "";
-    (document.getElementById("enddateselection") as HTMLInputElement).value = "";
+  useHotkeys("a", () => setToLastnTicks(5));
+  useHotkeys("c", () => {
+    (document.getElementById("startdateselection") as HTMLInputElement).value =
+      "";
+    (document.getElementById("enddateselection") as HTMLInputElement).value =
+      "";
     setTimeParam("", START_FILTER_KEY);
     setTimeParam("", END_FILTER_KEY);
   });
@@ -333,7 +339,14 @@ export function Header() {
   return (
     <>
       <Link to={`/?${searchParams}`}>
-        <div className="header-icon">🌷</div>
+        <div className="header-icon">
+          🌷+
+          <img
+            src={ulisseImg}
+            alt="Ulisse"
+            className="w-7 pb-1 inline-block ml-1"
+          />
+        </div>
       </Link>
       <div>
         <TextSearch></TextSearch>

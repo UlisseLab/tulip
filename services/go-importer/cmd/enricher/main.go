@@ -1,33 +1,35 @@
 package main
 
 import (
-	"go-importer/internal/pkg/db"
-	"net"
-
 	"bufio"
+	"context"
 	"errors"
 	"flag"
-	"log"
+	"net"
 	"os"
 	"time"
 
+	"github.com/charmbracelet/log"
+	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
+
+	"go-importer/internal/pkg/db"
 )
 
-var eve_file = flag.String("eve", "", "Eve file to watch for suricata's tags")
-var mongodb = flag.String("mongo", "", "MongoDB dns name + port (e.g. mongo:27017)")
-var tag_flowbits = flag.Bool("flowbits", true, "Tag flows with their flowbits")
-var rescan_period = flag.Int("t", 30, "rescan period (in seconds).")
+var (
+	eveFile      = flag.String("eve", "", "Eve file to watch for suricata's tags")
+	mongodb      = flag.String("mongo", "", "MongoDB dns name + port (e.g. mongo:27017)")
+	tagFlowbits  = flag.Bool("flowbits", true, "Tag flows with their flowbits")
+	rescanPeriod = flag.Int("t", 30, "rescan period (in seconds).")
+	redisConn    = flag.String("redis", "", "Redis connection string")
+)
 
-var g_db db.Database
+var gDb db.Database
 
 const WINDOW = 5000 // ms
 
 func main() {
 	flag.Parse()
-	if *eve_file == "" {
-		log.Fatal("Usage: ./enricher -eve eve.json")
-	}
 
 	// If no mongo DB was supplied, try the env variable
 	if *mongodb == "" {
@@ -38,18 +40,31 @@ func main() {
 		}
 	}
 
-	db_string := "mongodb://" + *mongodb
-	g_db = db.ConnectMongo(db_string)
+	if *redisConn == "" {
+		*redisConn = os.Getenv("REDIS_URL")
+	}
 
-	watchEve(*eve_file)
+	dbString := "mongodb://" + *mongodb
+	gDb = db.ConnectMongo(dbString)
+
+	if *eveFile != "" {
+		watchEve(*eveFile)
+	} else if *redisConn != "" {
+		watchRedis(*redisConn)
+	} else {
+		log.Warn("No eve file or redis connection supplied. Exiting.")
+		log.Warn("Usage: enricher -eve <eve_file> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
+		log.Warn("Usage: enricher -redis <redis_url> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
+		os.Exit(1)
+	}
 }
 
 func watchEve(eve_file string) {
 	// Do the initial scan
-	log.Println("Parsing initial eve contents...")
+	log.Info("Parsing initial eve contents...")
 	ratchet := updateEve(eve_file, 0)
 
-	log.Println("Monitoring eve file: ", eve_file)
+	log.Info("Monitoring eve file: ", eve_file)
 	stat, err := os.Stat(eve_file)
 	prevSize := int64(0)
 	if err == nil {
@@ -57,16 +72,16 @@ func watchEve(eve_file string) {
 	}
 
 	for {
-		time.Sleep(time.Duration(*rescan_period) * time.Second)
+		time.Sleep(time.Duration(*rescanPeriod) * time.Second)
 
 		new_stat, err := os.Stat(eve_file)
 		if err != nil {
-			log.Println("Failed to open the eve file with error: ", err)
+			log.Errorf("Failed to open the eve file with error: %v", err)
 			continue
 		}
 
 		if new_stat.Size() > prevSize {
-			log.Println("Eve file was updated. New size:, ", new_stat.Size())
+			log.Info("Eve file was updated. New size: %d", new_stat.Size())
 			ratchet = updateEve(eve_file, ratchet)
 		}
 		prevSize = new_stat.Size()
@@ -81,18 +96,18 @@ func updateEve(eve_file string, ratchet int64) int64 {
 	// Open a handle to the eve file
 	eve_handle, err := os.Open(eve_file)
 	if err != nil {
-		log.Println("Failed to open the eve file")
+		log.Errorf("Failed to open the eve file")
 		return ratchet
 	}
 	eve_handle.Seek(ratchet, 0)
-	eve_reader := bufio.NewReader(eve_handle)
+	eveReader := bufio.NewReader(eve_handle)
 	defer eve_handle.Close()
 
-	log.Println("Start scanning eve file @ ", ratchet)
+	log.Info("Start scanning eve file @ ", ratchet)
 
 	// iterate over each line in the file
 	for {
-		line, err := eve_reader.ReadString('\n')
+		line, err := eveReader.ReadString('\n')
 		if err != nil {
 			// This is most likely to be EOF, which is fine
 			// TODO; check the error code and log if it is something else
@@ -121,35 +136,35 @@ func updateEve(eve_file string, ratchet int64) int64 {
 }
 
 /*
-{
-	"timestamp": "2022-05-17T19:39:57.283547+0000",
-	"flow_id": 1905964640824789,
-	"in_iface": "eth0",
-	"event_type": "alert",
-	"src_ip": "131.155.9.104",
-	"src_port": 53604,
-	"dest_ip": "165.232.89.44",
-	"dest_port": 1337,
-	"proto": "TCP",
-	"pkt_src": "stream (flow timeout)",
-	"alert": {
-		"action": "allowed",
-		"gid": 1,
-		"signature_id": 1338,
-		"rev": 1,
-		"signature": "Detected too many A's (smart)",
-		"category": "",
-		"severity": 3
-	},
-	"app_proto": "failed",
-	"flow": {
-		"pkts_toserver": 6,
-		"pkts_toclient": 6,
-		"bytes_toserver": 437,
-		"bytes_toclient": 477,
-		"start": "2022-05-17T19:37:02.978389+0000"
+	{
+		"timestamp": "2022-05-17T19:39:57.283547+0000",
+		"flow_id": 1905964640824789,
+		"in_iface": "eth0",
+		"event_type": "alert",
+		"src_ip": "131.155.9.104",
+		"src_port": 53604,
+		"dest_ip": "165.232.89.44",
+		"dest_port": 1337,
+		"proto": "TCP",
+		"pkt_src": "stream (flow timeout)",
+		"alert": {
+			"action": "allowed",
+			"gid": 1,
+			"signature_id": 1338,
+			"rev": 1,
+			"signature": "Detected too many A's (smart)",
+			"category": "",
+			"severity": 3
+		},
+		"app_proto": "failed",
+		"flow": {
+			"pkts_toserver": 6,
+			"pkts_toclient": 6,
+			"bytes_toserver": 437,
+			"bytes_toclient": 477,
+			"start": "2022-05-17T19:37:02.978389+0000"
+		}
 	}
-}
 */
 type suricataLog struct {
 	flow      db.FlowID
@@ -190,7 +205,7 @@ func handleEveLine(json string) (bool, error) {
 	}
 
 	// If no action was taken, there's no need for us to do anything with this line.
-	if !(sig_action.Exists() || (flowbits.Exists() && *tag_flowbits)) {
+	if !(sig_action.Exists() || (flowbits.Exists() && *tagFlowbits)) {
 		return false, nil
 	}
 
@@ -221,11 +236,11 @@ func handleEveLine(json string) (bool, error) {
 		}
 
 		// TODO; use one, sensible query instead of just trying both cases
-		ret = g_db.AddSignatureToFlow(id, sig, WINDOW)
-		ret = ret || g_db.AddSignatureToFlow(id_rev, sig, WINDOW)
+		ret = gDb.AddSignatureToFlow(id, sig, WINDOW)
+		ret = ret || gDb.AddSignatureToFlow(id_rev, sig, WINDOW)
 	}
 
-	if !(flowbits.Exists() && *tag_flowbits) {
+	if !(flowbits.Exists() && *tagFlowbits) {
 		return ret, nil
 	}
 
@@ -236,7 +251,52 @@ func handleEveLine(json string) (bool, error) {
 	})
 
 	// TODO; use one, sensible query instead of just trying both cases
-	ret = g_db.AddTagsToFlow(id, tags, WINDOW)
-	ret = ret || g_db.AddTagsToFlow(id_rev, tags, WINDOW)
+	ret = gDb.AddTagsToFlow(id, tags, WINDOW)
+	ret = ret || gDb.AddTagsToFlow(id_rev, tags, WINDOW)
 	return ret, nil
+}
+
+func watchRedis(redisUrl string) {
+	opt, err := redis.ParseURL(redisUrl)
+	if err != nil {
+		log.Errorf("Failed to parse redis url: %v", err)
+		return
+	}
+
+	rdb := redis.NewClient(opt)
+	defer func() {
+		err := rdb.Close()
+		if err != nil {
+			log.Errorf("Failed to close redis connection: %v", err)
+		}
+	}()
+
+	log.Info("Connected to redis")
+
+	// connect to "suricata" list and ingest the data
+	for {
+		lines, err := rdb.RPopCount(context.TODO(), "suricata", 100).Result()
+		if err != nil {
+			if errors.Is(err, redis.Nil) {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			log.Warnf("Failed to pop from redis: %v", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		processed := 0
+		for _, line := range lines {
+			_, err = handleEveLine(line)
+			if err != nil {
+				log.Errorf(`Failed to handle eve line "%s": %s`, line, err)
+				continue
+			}
+			processed++
+		}
+
+		log.Infof("Processed %d lines from redis", processed)
+	}
 }

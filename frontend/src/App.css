@@ -40,14 +40,14 @@
   height: 50px;
   @apply gap-3;
 
-  input {
+  input, select {
     @apply flex bg-gray-200 py-1 px-3 rounded-md;
   }
 
   .header-icon {
     @apply text-2xl pl-5 pr-2
   }
-  
+
 }
 
 .text-mono {

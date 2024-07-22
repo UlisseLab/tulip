@@ -5,7 +5,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
-import { useHotkeys } from 'react-hotkeys-hook';
+import { useHotkeys } from "react-hotkeys-hook";
 import { Flow } from "../types";
 import {
   SERVICE_FILTER_KEY,
@@ -38,7 +38,7 @@ export function FlowList() {
   let params = useParams();
 
   // we add a local variable to prevent racing with the browser location API
-  let openedFlowID = params.id
+  let openedFlowID = params.id;
 
   const { data: availableTags } = useGetTagsQuery();
   const { data: services } = useGetServicesQuery();
@@ -66,7 +66,11 @@ export function FlowList() {
 
   const debounced_text_filter = useDebounce(text_filter, 300);
 
-  const { data: flowData, isLoading, refetch } = useGetFlowsQuery(
+  const {
+    data: flowData,
+    isLoading,
+    refetch,
+  } = useGetFlowsQuery(
     {
       "flow.data": debounced_text_filter,
       dst_ip: service?.ip,
@@ -78,7 +82,7 @@ export function FlowList() {
       flags: filterFlags,
       flagids: filterFlagids,
       includeTags: includeTags,
-      excludeTags: excludeTags
+      excludeTags: excludeTags,
     },
     {
       refetchOnMountOrArgChange: true,
@@ -102,62 +106,76 @@ export function FlowList() {
   const navigate = useNavigate();
 
   useEffect(() => {
-      virtuoso?.current?.scrollIntoView({
-        index: flowIndex,
-        behavior: 'auto',
-        done: () => {
-          if (transformedFlowData && transformedFlowData[flowIndex ?? 0]) {
-            let idAtIndex = transformedFlowData[flowIndex ?? 0]._id.$oid;
-            // if the current flow ID at the index indeed did change (ie because of keyboard navigation), we need to update the URL as well as local ID
-            if (idAtIndex !== openedFlowID) {
-              navigate(`/flow/${idAtIndex}?${searchParams}`)
-              openedFlowID = idAtIndex
-            }
+    virtuoso?.current?.scrollIntoView({
+      index: flowIndex,
+      behavior: "auto",
+      done: () => {
+        if (transformedFlowData && transformedFlowData[flowIndex ?? 0]) {
+          let idAtIndex = transformedFlowData[flowIndex ?? 0]._id.$oid;
+          // if the current flow ID at the index indeed did change (ie because of keyboard navigation), we need to update the URL as well as local ID
+          if (idAtIndex !== openedFlowID) {
+            navigate(`/flow/${idAtIndex}?${searchParams}`);
+            openedFlowID = idAtIndex;
           }
-        },
-      })
-    },
-    [flowIndex]
-  )
+        }
+      },
+    });
+  }, [flowIndex]);
 
   // TODO: there must be a better way to do this
   // this gets called on every refetch, we dont want to iterate all flows on every refetch
   // so because performance, we hack this by checking if the transformedFlowData length changed
-  const [transformedFlowDataLength, setTransformedFlowDataLength] = useState<number>(0);
-  useEffect(
-    () => {
-      if (transformedFlowData && transformedFlowDataLength != transformedFlowData?.length) {
-        setTransformedFlowDataLength(transformedFlowData?.length)
+  const [transformedFlowDataLength, setTransformedFlowDataLength] =
+    useState<number>(0);
+  useEffect(() => {
+    if (
+      transformedFlowData &&
+      transformedFlowDataLength != transformedFlowData?.length
+    ) {
+      setTransformedFlowDataLength(transformedFlowData?.length);
 
-        for (let i = 0; i < transformedFlowData?.length; i++) {
-          if (transformedFlowData[i]._id.$oid === openedFlowID) {
-            if (i !== flowIndex) {
-              setFlowIndex(i)
-            }
-            return
+      for (let i = 0; i < transformedFlowData?.length; i++) {
+        if (transformedFlowData[i]._id.$oid === openedFlowID) {
+          if (i !== flowIndex) {
+            setFlowIndex(i);
           }
+          return;
         }
-        setFlowIndex(0)
+      }
+      setFlowIndex(0);
+    }
+  }, [transformedFlowData]);
+
+  useHotkeys(
+    "j",
+    () =>
+      setFlowIndex((fi) =>
+        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1)
+      ),
+    [transformedFlowData?.length]
+  );
+  useHotkeys("k", () => setFlowIndex((fi) => Math.max(0, fi - 1)));
+  useHotkeys(
+    "i",
+    () => {
+      setShowFilters(true);
+      if ((availableTags ?? []).includes("flag-in")) {
+        dispatch(toggleFilterTag("flag-in"));
       }
     },
-    [transformedFlowData]
-  )
-
-  useHotkeys('j', () => setFlowIndex(fi => Math.min((transformedFlowData?.length ?? 1)-1, fi + 1)), [transformedFlowData?.length]);
-  useHotkeys('k', () => setFlowIndex(fi => Math.max(0, fi - 1)));
-  useHotkeys('i', () => {
-    setShowFilters(true)
-    if ((availableTags ?? []).includes("flag-in")) {
-      dispatch(toggleFilterTag("flag-in"))
-    }
-  }, [availableTags]);
-  useHotkeys('o', () => {
-    setShowFilters(true)
-    if ((availableTags ?? []).includes("flag-out")) {
-      dispatch(toggleFilterTag("flag-out"))
-    }
-  }, [availableTags]);
-  useHotkeys('r', () => refetch());
+    [availableTags]
+  );
+  useHotkeys(
+    "o",
+    () => {
+      setShowFilters(true);
+      if ((availableTags ?? []).includes("flag-out")) {
+        dispatch(toggleFilterTag("flag-out"));
+      }
+    },
+    [availableTags]
+  );
+  useHotkeys("r", () => refetch());
 
   const [showFilters, setShowFilters] = useState(false);
 
@@ -241,14 +259,8 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
 
   const isStarred = flow.tags.includes("starred");
   // Filter tag list for tags that are handled specially
-  const filtered_tag_list = flow.tags.filter((t) => t != "starred");
+  const filteredTagList = flow.tags.filter((t) => t != "starred");
 
-  const duration =
-    flow.duration > 10000 ? (
-      <div className="text-red-500">&gt;10s</div>
-    ) : (
-      <div>{flow.duration}ms</div>
-    );
   return (
     <li
       className={classNames({
@@ -262,7 +274,7 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
             onHeartClick(flow);
           }}
         >
-          {flow.tags.includes("starred") ? (
+          {isStarred ? (
             <HeartIcon className="text-red-500" />
           ) : (
             <EmptyHeartIcon />
@@ -275,23 +287,32 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
             <LinkIcon className="text-blue-500" />
           ) : undefined}
         </div>
-        <div className="flex-1 shrink">
+        <div className="flex-1 shrink ">
           <div className="flex">
             <div className="shrink-0">
+              →{" "}
               <span className="text-gray-700 font-bold overflow-ellipsis overflow-hidden ">
                 {flow.service_tag}
               </span>
-              <span className="text-gray-500">:{flow.dst_port}</span>
+              <span className="text-gray-500"> (:{flow.dst_port})</span>
             </div>
 
             <div className="ml-2">
               <span className="text-gray-500">{formatted_time_h_m_s}</span>
               <span className="text-gray-300">{formatted_time_ms}</span>
             </div>
-            <div className="text-gray-500 ml-auto">{duration}</div>
+            <div className="text-gray-500 ml-auto text-sm">
+              {flow.duration > 10000 ? (
+                <div className="text-red-500">&gt;10s</div>
+              ) : (
+                <div>{flow.duration}ms</div>
+              )}
+            </div>
           </div>
+
+          <hr className="border-gray-200 my-2" />
           <div className="flex gap-2 flex-wrap">
-            {filtered_tag_list.map((tag) => (
+            {filteredTagList.map((tag) => (
               <Tag key={tag} tag={tag}></Tag>
             ))}
           </div>

@@ -94,22 +94,28 @@ services:
     restart: unless-stopped
     depends_on:
       - mongo
-    volumes:
-      - suricata_logs:/suricata
-    command: "./enricher -eve /suricata/eve.json"
+      - redis
     environment:
       TULIP_MONGO: ${TULIP_MONGO}
+      REDIS_URL: redis://redis:6379
 
   suricata:
     build: services/suricata
+    depends_on:
+      - redis
     restart: unless-stopped
     volumes:
-      - suricata_logs:/suricata
-      - ./services/suricata/suricata.rules:/var/lib/suricata/rules/suricata.rules:ro
+      - ./suricata.rules:/var/lib/suricata/rules/suricata.rules:ro
     environment:
       PCAP_OVER_IP: ${PCAP_OVER_IP}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    tty: true
 
-volumes:
-  suricata_logs:
+
+  redis:
+    hostname: redis
+    image: redis:6
+    restart: unless-stopped
