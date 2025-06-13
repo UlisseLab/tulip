@@ -7,6 +7,7 @@ on:
 jobs:
   go-importer:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -14,18 +15,18 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.24"
-          cache-dependency-path: "**/*.sum"
-
-      - run: cd services/go-importer
 
       - name: Install dependencies
         run: go mod download
+        working-directory: services/go-importer
 
       - name: Build
         run: go build ./...
+        working-directory: services/go-importer
 
       - name: Run tests
         run: go test ./...
+        working-directory: services/go-importer
 
   frontend:
     runs-on: ubuntu-latest
@@ -37,13 +38,17 @@ jobs:
         with:
           node-version: "current"
 
-      - run: cd frontend
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: npm install
+        run: yarn install
+        working-directory: frontend
 
       - name: Build
-        run: npm run build
+        run: yarn build
+        working-directory: frontend
 
       - name: Run tests
-        run: npm test
+        run: yarn test
+        working-directory: frontend
