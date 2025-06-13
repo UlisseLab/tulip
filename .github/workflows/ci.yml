@@ -1,3 +1,5 @@
+name: CI
+
 on:
   push:
     branches: [master]
@@ -6,6 +8,7 @@ on:
 
 jobs:
   go-importer:
+    name: Go Importer
     runs-on: ubuntu-latest
 
     steps:
@@ -26,14 +29,15 @@ jobs:
         working-directory: services/go-importer
 
       - name: Build
-        run: go build ./...
+        run: go build -v ./...
         working-directory: services/go-importer
 
       - name: Run tests
-        run: go test ./...
+        run: go test -v ./...
         working-directory: services/go-importer
 
   frontend:
+    name: Frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
