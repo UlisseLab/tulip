@@ -1169,10 +1169,10 @@ has@^1.0.3:
   dependencies:
     function-bind "^1.1.1"
 
-hexy@^0.3.4:
-  version "0.3.4"
-  resolved "https://registry.npmjs.org/hexy/-/hexy-0.3.4.tgz"
-  integrity sha512-P2V2yx+XhEJRjXCe9IlRzbcL33plTaIjn+OSvgWu0Z9+2WkL71d+eC4jQ91rooM+F0JNERnENH6mpHlpcT+qlA==
+hexy@^0.3.5:
+  version "0.3.5"
+  resolved "https://registry.yarnpkg.com/hexy/-/hexy-0.3.5.tgz#adcd5ee47d66aca3581d771743a509a5176e45f9"
+  integrity sha512-UCP7TIZPXz5kxYJnNOym+9xaenxCLor/JyhKieo8y8/bJWunGh9xbhy3YrgYJUQ87WwfXGm05X330DszOfINZw==
 
 history@^5.2.0:
   version "5.3.0"
