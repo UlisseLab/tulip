@@ -86,11 +86,11 @@ func (db Database) ConfigureIndexes() {
 
 	_, err := flowCollection.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
 		// time index (range filtering)
-		{Keys: bson.D{{"time", 1}}},
+		{Keys: bson.D{{Key: "time", Value: 1}}},
 		// data index (context filtering)
-		{Keys: bson.D{{"data", "text"}}},
+		{Keys: bson.D{{Key: "data", Value: "text"}}},
 		// port combo index (traffic correlation)
-		{Keys: bson.D{{"src_port", 1}, {"dst_port", 1}}},
+		{Keys: bson.D{{Key: "src_port", Value: 1}, {Key: "dst_port", Value: 1}}},
 	})
 
 	if err != nil {
@@ -341,8 +341,8 @@ func (db Database) InsertTag(tag string) {
 }
 
 type Flagid struct {
-	ID   string `bson:"_id"`
-	Time int    `bson:"time"`
+	ID   primitive.ObjectID `bson:"_id"`
+	Time int                `bson:"time"`
 }
 
 func (db Database) GetFlagids(flaglifetime int) ([]Flagid, error) {

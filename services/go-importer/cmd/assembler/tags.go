@@ -73,17 +73,18 @@ func ApplyFlagTags(flow *db.FlowEntry, reg *string) {
 
 // Apply flagids to the entire flow.
 // This assumes the `Data` part of the flowItem is already pre-processed, s.t.
-func ApplyFlagids(flow *db.FlowEntry, flagidsDb []db.Flagid) {
+func ApplyFlagids(flow *db.FlowEntry, flagIdsDb []db.Flagid) {
 
 	var flagids []string
 	var matches = make(map[int]int)
 
-	for _, flagid := range flagidsDb {
-		flagids = append(flagids, flagid.ID)
+	for _, flagid := range flagIdsDb {
+		flagids = append(flagids, flagid.ID.String())
 	}
 
 	matcher := ahocorasick.NewStringMatcher(flagids)
-	for idx := 0; idx < len(flow.Flow); idx++ {
+
+	for idx := range flow.Flow {
 		flowItem := &flow.Flow[idx]
 		found := matcher.Match([]byte(flowItem.Data))
 
@@ -107,7 +108,7 @@ func ApplyFlagids(flow *db.FlowEntry, flagidsDb []db.Flagid) {
 		}
 	}
 
-	for match, _ := range matches {
+	for match := range matches {
 		flow.Flagids = append(flow.Flagids, flagids[match])
 	}
 }

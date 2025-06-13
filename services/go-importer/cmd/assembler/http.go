@@ -63,6 +63,7 @@ func ParseHttpFlow(flow *db.FlowEntry) {
 			// Parse HTTP Response
 			res, err := http.ReadResponse(reader, nil)
 			if err != nil || res == nil {
+				// Failed to fully read the body. Bail out here
 				continue
 			}
 
@@ -76,20 +77,17 @@ func ParseHttpFlow(flow *db.FlowEntry) {
 			}
 
 			// Substitute body
-			encoding := res.Header["Content-Encoding"]
-			if encoding == nil || len(encoding) == 0 {
+			encodingHeader := res.Header["Content-Encoding"]
+			if encodingHeader == nil || len(encodingHeader) == 0 {
 				// If we don't find an encoding header, it is either not valid,
 				// or already in plain text. In any case, we don't have to edit anything.
 				continue
 			}
 
 			var newReader io.Reader
-			if err != nil {
-				// Failed to fully read the body. Bail out here
-				continue
-			}
 
-			switch encoding[0] {
+			encoding := strings.ToLower(encodingHeader[0])
+			switch encoding {
 			case "gzip":
 				newReader, err = handleGzip(res.Body)
 				break
