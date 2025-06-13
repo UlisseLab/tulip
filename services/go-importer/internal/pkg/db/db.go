@@ -131,22 +131,23 @@ func (db Database) InsertFlow(flow FlowEntry) {
 		}
 		opts := options.FindOne().SetSort(bson.M{"time": -1})
 
-		// TODO does this return the first one? If multiple documents satisfy the given query expression, then this method will return the first document according to the natural order which reflects the order of documents on the disk.
-		connectedFlow := struct {
+		type connectedFlow struct {
 			MongoID primitive.ObjectID `bson:"_id"`
-		}{}
-		err := flowCollection.FindOne(context.TODO(), query, opts).Decode(&connectedFlow)
+		}
+
+		// TODO does this return the first one? If multiple documents satisfy the given query expression, then this method will return the first document according to the natural order which reflects the order of documents on the disk.
+		connFlow := connectedFlow{}
+		err := flowCollection.FindOne(context.TODO(), query, opts).Decode(&connFlow)
 
 		// There is a connected flow
 		if err == nil {
 			//TODO Maybe add the childs fingerprints to mine?
-			flow.Child_id = connectedFlow.MongoID
+			flow.Child_id = connFlow.MongoID
 		}
 	}
 
 	// TODO; use insertMany instead
 	insertion, err := flowCollection.InsertOne(context.TODO(), flow)
-	// check for errors in the insertion
 	if err != nil {
 		log.Println("Error occured while inserting record: ", err)
 		log.Println("NO PCAP DATA WILL BE AVAILABLE FOR: ", flow.Filename)
@@ -156,18 +157,15 @@ func (db Database) InsertFlow(flow FlowEntry) {
 		return
 	}
 
-	query := bson.M{
-		"_id": flow.Child_id,
-	}
+	query := bson.M{"_id": flow.Child_id}
 
-	info := bson.M{
-		"$set": bson.M{
-			"parent_id": insertion.InsertedID,
-		},
-	}
+	info := bson.M{"$set": bson.M{"parent_id": insertion.InsertedID}}
 
 	_, err = flowCollection.UpdateOne(context.TODO(), query, info)
 	//TODO error handling
+	if err != nil {
+		log.Println("Error occured while updating record: ", err)
+	}
 }
 
 type PcapFile struct {
