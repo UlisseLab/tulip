@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:5
+    image: mongo:7
     restart: always
     ports:
       - "127.0.0.1:27017:27017" # Only expose to localhost
@@ -22,11 +22,7 @@ services:
       API_SERVER_ENDPOINT: http://api:5000/
 
   api:
-    build:
-      context: services/api
-      dockerfile: Dockerfile-api
-
-    image: tulip-api:latest
+    build: services/api
     restart: unless-stopped
 
     depends_on:
@@ -45,8 +41,7 @@ services:
 
   flagids:
     restart: on-failure
-    build:
-      context: services/flagids
+    build: services/flagids
     image: tulip-flagids:latest
 
     depends_on:
@@ -113,7 +108,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     tty: true
-
 
   redis:
     hostname: redis
