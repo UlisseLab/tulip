@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -85,27 +86,15 @@ func (db Database) ConfigureIndexes() {
 
 	_, err := flowCollection.Indexes().CreateMany(context.Background(), []mongo.IndexModel{
 		// time index (range filtering)
-		{
-			Keys: bson.D{
-				{"time", 1},
-			},
-		},
+		{Keys: bson.D{{"time", 1}}},
 		// data index (context filtering)
-		{
-			Keys: bson.D{
-				{"data", "text"},
-			},
-		},
+		{Keys: bson.D{{"data", "text"}}},
 		// port combo index (traffic correlation)
-		{
-			Keys: bson.D{
-				{"src_port", 1},
-				{"dst_port", 1},
-			},
-		},
+		{Keys: bson.D{{"src_port", 1}, {"dst_port", 1}}},
 	})
 
 	if err != nil {
+		fmt.Println("Error creating indexes:", err)
 		panic(err)
 	}
 }
@@ -120,8 +109,9 @@ func (db Database) InsertFlow(flow FlowEntry) {
 	flowCollection := db.client.Database("pcap").Collection("pcap")
 
 	// Process the data, so it works well in mongodb
-	for idx := 0; idx < len(flow.Flow); idx++ {
+	for idx := range flow.Flow {
 		flowItem := &flow.Flow[idx]
+
 		// Base64 encode the raw data string
 		flowItem.B64 = base64.StdEncoding.EncodeToString([]byte(flowItem.Data))
 		// filter the data string down to only printable characters
@@ -375,9 +365,14 @@ func (db Database) GetFlagids(flaglifetime int) ([]Flagid, error) {
 
 	cur, err := collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to find flagids: %v", err)
 	}
-	defer cur.Close(ctx)
+	defer func() {
+		err := cur.Close(ctx)
+		if err != nil {
+			log.Printf("Failed to close cursor: %v", err)
+		}
+	}()
 
 	var flagids []Flagid
 
@@ -385,13 +380,13 @@ func (db Database) GetFlagids(flaglifetime int) ([]Flagid, error) {
 	for cur.Next(ctx) {
 		var flagid Flagid
 		if err := cur.Decode(&flagid); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to decode flagid: %v", err)
 		}
 		flagids = append(flagids, flagid)
 	}
 
 	if err := cur.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cursor error: %v", err)
 	}
 
 	return flagids, nil
