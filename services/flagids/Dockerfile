@@ -1,13 +1,11 @@
-FROM python:3.8
+ARG PYTHON_VERSION=3.8
 
+FROM ghcr.io/astral-sh/uv:python${PYTHON_VERSION}-alpine
 WORKDIR /app
 
-COPY ./ /app/
+COPY ./requirements.txt ./
+RUN uv venv && \
+    uv pip install -r requirements.txt
 
-COPY ./requirements.txt /app/
-
-RUN pip install -r ./requirements.txt
-
-COPY ./flagids.py /app/
-
-CMD python3 ./flagids.py
+COPY flagids.py ./
+CMD ["uv", "run", "flagids.py"]
