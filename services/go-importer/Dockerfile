@@ -1,6 +1,5 @@
 ### BASE BUILDER
-
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 RUN apk add --no-cache git make build-base libpcap-dev
 WORKDIR /build
 
@@ -10,16 +9,20 @@ RUN go mod download
 COPY ./ ./
 RUN go build ./cmd/enricher && go build ./cmd/assembler
 
-### ENRICHER
+### BASE IMAGE
 
-FROM alpine:3.12 as enricher
+FROM alpine:3.12 as base
+
+### ENRICHER
+FROM base as enricher
+
 WORKDIR /app
 COPY --from=builder /build/enricher ./
 CMD ["./enricher"]
 
 ### ASSEMBLER
+FROM base as assembler
 
-FROM alpine:3.9 as assembler
 RUN apk add --no-cache libpcap-dev
 WORKDIR /app
 COPY --from=builder /build/assembler ./
