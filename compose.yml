@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:7
+    image: mongo:8
     restart: always
     ports:
       - "127.0.0.1:27017:27017" # Only expose to localhost
