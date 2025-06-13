@@ -111,5 +111,5 @@ services:
 
   redis:
     hostname: redis
-    image: redis:6
+    image: redis:8
     restart: unless-stopped
