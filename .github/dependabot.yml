@@ -1,12 +1,31 @@
-# Basic dependabot.yml file with
-# minimum configuration for two package managers
-
 version: 2
 updates:
-  # Enable version updates for npm
   - package-ecosystem: "npm"
-    # Look for `package.json` and `lock` files in the `root` directory
-    directory: "/"
-    # Check the npm registry for updates every day (weekdays)
+    directory: "frontend"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+
+  - package-ecosystem: gomod
+    directory: services/go-importer
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: pip
+    directory: services/api
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: /
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker-compose"
+    directory: /
+    schedule:
+      interval: "weekly"
