@@ -27,15 +27,20 @@ interface TagProps {
   excluded?: boolean;
   onClick?: () => void;
 }
-export const Tag = ({ tag, color, disabled = false, excluded = false, onClick }: TagProps) => {
+export const Tag = ({
+  tag,
+  color,
+  disabled = false,
+  excluded = false,
+  onClick,
+}: TagProps) => {
   var tagBackgroundColor = disabled ? "#eee" : color ?? tagToColor(tag);
 
   var tagTextColor = disabled
     ? "#bbb"
     : Color(tagBackgroundColor).isDark()
-      ? "#fff"
-      : "#000";
-
+    ? "#fff"
+    : "#000";
 
   if (excluded) {
     tagTextColor = "white";
@@ -44,15 +49,20 @@ export const Tag = ({ tag, color, disabled = false, excluded = false, onClick }:
   return (
     <div
       onClick={onClick}
-      className={classNames("p-3 cursor-pointer rounded-md uppercase text-xs h-5 text-center flex items-center hover:opacity-90 transition-colors duration-250 text-ellipsis overflow-hidden whitespace-nowrap", {
-        "bg-gray-300": disabled,
-      })}
+      className={classNames(
+        "p-3 cursor-pointer rounded-md uppercase text-xs h-5 text-center flex items-center hover:opacity-90 transition-colors duration-250 text-ellipsis overflow-hidden whitespace-nowrap",
+        {
+          "bg-gray-300": disabled,
+        }
+      )}
       style={{
         backgroundColor: tagBackgroundColor,
         color: tagTextColor,
       }}
     >
-      <span  style={excluded ? { textDecoration: 'line-through' } : {}}>{tag}</span>
+      <span style={excluded ? { textDecoration: "line-through" } : {}}>
+        {tag}
+      </span>
     </div>
   );
 };

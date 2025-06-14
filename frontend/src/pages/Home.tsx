@@ -18,7 +18,7 @@ const shortcutTableData = [
   ],
 ];
 
-const generateShortcutTable = (data: { key: string; action: string }[][]) => {
+function generateShortcutTable(data: { key: string; action: string }[][]) {
   return (
     <div className="flex flex-row gap-4">
       {data.map((table, tableIndex) => (
@@ -47,7 +47,7 @@ const generateShortcutTable = (data: { key: string; action: string }[][]) => {
       ))}
     </div>
   );
-};
+}
 
 export function Home() {
   return (
@@ -58,7 +58,6 @@ export function Home() {
 
       <h1 className="text-2xl text-gray-500 mt-8">Shortcut reference:</h1>
       {generateShortcutTable(shortcutTableData)}
-      {/* <h1 className="text-3xl font-bold pt-2 pb-4"></h1> */}
     </div>
   );
 }

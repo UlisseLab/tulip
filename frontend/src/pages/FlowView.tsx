@@ -1,17 +1,7 @@
-import {
-  useSearchParams,
-  Link,
-  useParams,
-  useNavigate,
-} from "react-router-dom";
-import React, {
-  ChangeEvent,
-  useDeferredValue,
-  useEffect,
-  useState,
-} from "react";
+import { useSearchParams, useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { FlowData, FullFlow } from "../types";
+import type { FlowData, FullFlow } from "../types";
 import { Buffer } from "buffer";
 import {
   TEXT_FILTER_KEY,
@@ -38,12 +28,11 @@ import {
   useGetFlagRegexQuery,
 } from "../api";
 import escapeStringRegexp from "escape-string-regexp";
-import { tr } from "date-fns/locale";
 
 const SECONDARY_NAVBAR_HEIGHT = 50;
 
 function CopyButton({ copyText }: { copyText?: string }) {
-  const { statusText, copy, copyState } = useCopy({
+  const { statusText, copy } = useCopy({
     getText: async () => copyText ?? "",
   });
   return (
@@ -82,6 +71,7 @@ function HexFlow({ flow }: { flow: FlowData }) {
   const hex = hexy(Buffer.from(flow.b64, "base64"), { format: "twos" });
   return <FlowContainer copyText={hex}>{hex}</FlowContainer>;
 }
+
 function highlightText(
   flowText: string,
   search_string: string,
@@ -93,18 +83,20 @@ function highlightText(
   try {
     const flag_regex = new RegExp(`(${flag_string})`, "g");
     const search_regex = new RegExp(`(${search_string})`, "gi");
+
     const combined_regex = new RegExp(
       `${search_regex.source}|${flag_regex.source}`,
       "gi"
     );
-    let parts;
-    if (search_string !== "") {
-      parts = flowText.split(combined_regex);
-    } else {
-      parts = flowText.split(flag_regex);
-    }
+
+    let parts =
+      search_string !== ""
+        ? flowText.split(combined_regex)
+        : flowText.split(flag_regex);
+
     const searchClasses = "bg-orange-200 rounded-sm";
     const flagClasses = "bg-red-200 rounded-sm";
+
     return (
       <span>
         {parts.map((part, i) => (
@@ -175,13 +167,6 @@ function PythonRequestFlow({
   return <FlowContainer copyText={data}>{data}</FlowContainer>;
 }
 
-interface FlowProps {
-  full_flow: FullFlow;
-  flow: FlowData;
-  delta_time: number;
-  id: string;
-}
-
 function detectType(flow: FlowData) {
   const firstLine = flow.data.split("\n")[0];
   if (firstLine.includes("HTTP")) {
@@ -203,6 +188,13 @@ function getFlowBody(flow: FlowData, flowType: string) {
   }
   return null;
 }
+
+type FlowProps = {
+  full_flow: FullFlow;
+  flow: FlowData;
+  delta_time: number;
+  id: string;
+};
 
 function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
   const formatted_time = format(new Date(flow.time), "HH:mm:ss:SSS");
@@ -449,7 +441,7 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
 }
 
 export function FlowView() {
-  let [searchParams, setSearchParams] = useSearchParams();
+  let [searchParams, _setSearchParams] = useSearchParams();
   const params = useParams();
   const navigate = useNavigate();
 

@@ -1,7 +1,7 @@
-import { useSearchParams, Link, useParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useState } from "react";
 
-import { FullFlow } from "../types";
+import type { FullFlow } from "../types";
 
 import ReactDiffViewer from "react-diff-viewer";
 import { RadioGroup } from "../components/RadioGroup";
@@ -48,7 +48,7 @@ const displayOptions = ["Plain", "Hex"];
 const deriveDisplayMode = (
   firstFlow: FullFlow,
   secondFlow: FullFlow
-): typeof displayOptions[number] => {
+): (typeof displayOptions)[number] => {
   if (firstFlow && secondFlow) {
     for (
       let i = 0;
@@ -138,3 +138,5 @@ export function DiffView() {
     </div>
   );
 }
+
+export default DiffView;

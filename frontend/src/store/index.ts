@@ -4,7 +4,6 @@ import { useDispatch, useSelector } from "react-redux";
 import type { TypedUseSelectorHook } from "react-redux";
 
 import { tulipApi } from "../api";
-
 import filterReducer from "./filter";
 
 export const store = configureStore({

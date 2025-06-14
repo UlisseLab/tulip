@@ -1,7 +1,7 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 import { API_BASE_PATH } from "./const";
-import {
+import type {
   Service,
   FullFlow,
   Signature,
@@ -34,8 +34,10 @@ export const tulipApi = createApi({
         // Diederik gives you a beer once this has been fixed
         body: JSON.stringify({
           ...query,
-          includeTags: query.includeTags.length > 0 ? query.includeTags : undefined,
-          excludeTags: query.excludeTags.length > 0 ? query.excludeTags : undefined,
+          includeTags:
+            query.includeTags.length > 0 ? query.includeTags : undefined,
+          excludeTags:
+            query.excludeTags.length > 0 ? query.excludeTags : undefined,
         }),
       }),
     }),

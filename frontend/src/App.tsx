@@ -1,17 +1,21 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
-import { Suspense } from "react";
-import { useHotkeys } from 'react-hotkeys-hook';
+import { useHotkeys } from "react-hotkeys-hook";
 
 import "./App.css";
 import { Header } from "./components/Header";
 import { Home } from "./pages/Home";
+
 import { FlowList } from "./components/FlowList";
 import { FlowView } from "./pages/FlowView";
-import { DiffView } from "./pages/DiffView";
-import { Corrie } from "./components/Corrie";
+
+const DiffView = lazy(() => import("./pages/DiffView"));
+const Corrie = lazy(() => import("./components/Corrie"));
 
 function App() {
-  useHotkeys('esc', () => (document.activeElement as HTMLElement).blur(), {enableOnFormTags: true});
+  useHotkeys("esc", () => (document.activeElement as HTMLElement).blur(), {
+    enableOnFormTags: true,
+  });
   return (
     <BrowserRouter>
       <Routes>
@@ -68,7 +72,6 @@ function Layout() {
     </div>
   );
 }
-
 
 function PageNotFound() {
   return (

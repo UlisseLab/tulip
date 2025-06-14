@@ -1,11 +1,8 @@
 COMPOSE := "docker compose"
 
 build:
-    {{COMPOSE}} build --pull
+    {{COMPOSE}} build
 
-dev:
-    {{COMPOSE}} up -d mongo
-    {{COMPOSE}} up -d api
-
-wipe-tags:
-    uv run scripts/wipe_tags.py
+[confirm("Are you sure you want to replace the .env file? (y/n)")]
+env:
+    cp .env.example .env
