@@ -13,7 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
 
-	"go-importer/internal/pkg/db"
+	"tulip/pkg/db"
 )
 
 var (

@@ -11,6 +11,9 @@ jobs:
     name: Go Importer
     runs-on: ubuntu-latest
 
+    env:
+      WDIR: services/
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,16 +29,16 @@ jobs:
           cache-dependency-path: "**/*.sum"
 
       - name: Install dependencies
-        run: go mod download
-        working-directory: services/go-importer
+        run: go mod download -x
+        working-directory: ${{ env.WDIR }}
 
       - name: Build
         run: go build -v ./...
-        working-directory: services/go-importer
+        working-directory: ${{ env.WDIR }}
 
       - name: Run tests
         run: go test -v ./...
-        working-directory: services/go-importer
+        working-directory: ${{ env.WDIR }}
 
   frontend:
     name: Frontend
@@ -58,3 +61,20 @@ jobs:
       - name: Build
         run: yarn build
         working-directory: frontend
+
+  compose:
+    name: Compose
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Copy .env file
+        run: cp .env.example .env
+
+      - name: Build and push Docker images
+        run: |
+          docker compose build --pull

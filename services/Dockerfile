@@ -8,12 +8,15 @@ RUN apk add --no-cache git make build-base libpcap-dev
 WORKDIR /build
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download -x
 
 COPY ./ ./
 
-RUN go build -v -o enricher ./cmd/enricher \
-    && go build -v -o assembler ./cmd/assembler
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go build -v ./... \
+    && go build -v -o enricher ./cmd/enricher \
+    && go build -v -o assembler ./cmd/assembler \
+    && go build -v -o api ./cmd/api
 
 ### BASE IMAGE
 FROM alpine:${ALPINE_VERSION} AS base
@@ -32,3 +35,11 @@ RUN apk add --no-cache libpcap-dev
 WORKDIR /app
 COPY --from=builder /build/assembler ./
 CMD ["./assembler"]
+
+### API
+FROM base AS api
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+COPY --from=builder /build/api ./
+CMD ["./api"]

@@ -100,7 +100,7 @@ export function FlowList() {
   }));
 
   const onHeartHandler = async (flow: Flow) => {
-    await starFlow({ id: flow._id.$oid, star: !flow.tags.includes("starred") });
+    await starFlow({ id: flow._id, star: !flow.tags.includes("starred") });
   };
 
   const navigate = useNavigate();
@@ -111,7 +111,7 @@ export function FlowList() {
       behavior: "auto",
       done: () => {
         if (transformedFlowData && transformedFlowData[flowIndex ?? 0]) {
-          let idAtIndex = transformedFlowData[flowIndex ?? 0]._id.$oid;
+          let idAtIndex = transformedFlowData[flowIndex ?? 0]._id;
           // if the current flow ID at the index indeed did change (ie because of keyboard navigation), we need to update the URL as well as local ID
           if (idAtIndex !== openedFlowID) {
             navigate(`/flow/${idAtIndex}?${searchParams}`);
@@ -135,7 +135,7 @@ export function FlowList() {
       setTransformedFlowDataLength(transformedFlowData?.length);
 
       for (let i = 0; i < transformedFlowData?.length; i++) {
-        if (transformedFlowData[i]._id.$oid === openedFlowID) {
+        if (transformedFlowData[i]._id === openedFlowID) {
           if (i !== flowIndex) {
             setFlowIndex(i);
           }
@@ -228,16 +228,16 @@ export function FlowList() {
         initialTopMostItemIndex={flowIndex}
         itemContent={(index, flow) => (
           <Link
-            to={`/flow/${flow._id.$oid}?${searchParams}`}
+            to={`/flow/${flow._id}?${searchParams}`}
             onClick={() => setFlowIndex(index)}
-            key={flow._id.$oid}
+            key={flow._id}
             className="focus-visible:rounded-md"
             //style={{ paddingTop: '1em' }}
           >
             <FlowListEntry
-              key={flow._id.$oid}
+              key={flow._id}
               flow={flow}
-              isActive={flow._id.$oid === openedFlowID}
+              isActive={flow._id === openedFlowID}
               onHeartClick={onHeartHandler}
             />
           </Link>
@@ -282,8 +282,8 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
         </div>
 
         <div className="w-5 mr-2 self-center shrink-0">
-          {flow.child_id.$oid != "000000000000000000000000" ||
-          flow.parent_id.$oid != "000000000000000000000000" ? (
+          {flow.child_id != "000000000000000000000000" ||
+          flow.parent_id != "000000000000000000000000" ? (
             <LinkIcon className="text-blue-500" />
           ) : undefined}
         </div>

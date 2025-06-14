@@ -9,7 +9,7 @@
 package main
 
 import (
-	"go-importer/internal/pkg/db"
+	"tulip/pkg/db"
 
 	"sync"
 	"time"
@@ -37,7 +37,7 @@ type TcpStreamFactory struct {
 }
 
 func (factory *TcpStreamFactory) New(net, transport gopacket.Flow, tcp *layers.TCP, ac reassembly.AssemblerContext) reassembly.Stream {
-	source := ac.GetCaptureInfo().AncillaryData[0].(string);
+	source := ac.GetCaptureInfo().AncillaryData[0].(string)
 	fsmOptions := reassembly.TCPSimpleFSMOptions{
 		SupportMissingEstablishment: *nonstrict,
 	}
@@ -194,23 +194,23 @@ func (t *TcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 	duration = t.FlowItems[len(t.FlowItems)-1].Time - time
 
 	entry := db.FlowEntry{
-		Src_port:    int(t.src_port),
-		Dst_port:    int(t.dst_port),
-		Src_ip:      src.String(),
-		Dst_ip:      dst.String(),
+		SrcPort:     int(t.src_port),
+		DstPort:     int(t.dst_port),
+		SrcIp:       src.String(),
+		DstIp:       dst.String(),
 		Time:        time,
 		Duration:    duration,
 		Num_packets: t.num_packets,
-		Parent_id:   primitive.NilObjectID,
-		Child_id:    primitive.NilObjectID,
+		ParentId:    primitive.NilObjectID,
+		ChildId:     primitive.NilObjectID,
 		Blocked:     false,
-		Tags:        []string { "tcp" },
+		Tags:        []string{"tcp"},
 		Suricata:    make([]int, 0),
 		Filename:    t.source,
 		Flow:        t.FlowItems,
 		Size:        t.total_size,
 		Flags:       make([]string, 0),
-		Flagids:      make([]string, 0),
+		Flagids:     make([]string, 0),
 	}
 
 	t.reassemblyCallback(entry)

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,40 +18,230 @@ import (
 
 // Added a flow struct
 type FlowItem struct {
-	/// From: "s" / "c" for server or client
-	From string
-	/// Data, in a somewhat readable format
-	Data string
-	/// The raw data, base64 encoded.
-	// TODO; Replace this with gridfs
-	B64 string
-	/// Timestamp of the first packet in the flow (Epoch / ms)
-	Time int
+	From string `bson:"from" json:"from"` // From: "s" / "c" for server or client
+	Data string `bson:"data" json:"data"` // Data, in a somewhat readable format
+	B64  string `bson:"b64" json:"b64"`   // The raw data, base64 encoded. TODO: Replace this with gridfs
+	Time int    `bson:"time" json:"time"` // Timestamp of the first packet in the flow (Epoch / ms)
 }
 
 type FlowEntry struct {
-	Src_port     int
-	Dst_port     int
-	Src_ip       string
-	Dst_ip       string
-	Time         int
-	Duration     int
-	Num_packets  int
-	Blocked      bool
-	Filename     string
-	Parent_id    primitive.ObjectID
-	Child_id     primitive.ObjectID
-	Fingerprints []uint32
-	Suricata     []int
-	Flow         []FlowItem
-	Tags         []string
-	Size         int
-	Flags        []string
-	Flagids      []string
+	Id           primitive.ObjectID `bson:"_id,omitempty" json:"_id"`       // MongoDB unique identifier
+	SrcPort      int                `bson:"src_port" json:"src_port"`       // Source port
+	DstPort      int                `bson:"dst_port" json:"dst_port"`       // Destination port
+	SrcIp        string             `bson:"src_ip" json:"src_ip"`           // Source IP address
+	DstIp        string             `bson:"dst_ip" json:"dst_ip"`           // Destination IP address
+	Time         int                `bson:"time" json:"time"`               // Timestamp (epoch)
+	Duration     int                `bson:"duration" json:"duration"`       // Duration in milliseconds
+	Num_packets  int                `bson:"num_packets" json:"num_packets"` // Number of packets
+	Blocked      bool               `bson:"blocked" json:"blocked"`
+	Filename     string             `bson:"filename" json:"filename"`   // Name of the pcap file this flow was captured in
+	ParentId     primitive.ObjectID `bson:"parent_id" json:"parent_id"` // Parent flow ID if this is a child flow
+	ChildId      primitive.ObjectID `bson:"child_id" json:"child_id"`   // Child flow ID if this is a parent flow
+	Fingerprints []uint32           `bson:"fingerprints" json:"fingerprints"`
+	Suricata     []int              `bson:"suricata" json:"suricata"`
+	Flow         []FlowItem         `bson:"flow" json:"flow"`
+	Tags         []string           `bson:"tags" json:"tags"`       // Tags associated with this flow, e.g. "starred", "tcp", "udp", "blocked"
+	Size         int                `bson:"size" json:"size"`       // Size of the flow in bytes
+	Flags        []string           `bson:"flags" json:"flags"`     // Flags contained in the flow
+	Flagids      []string           `bson:"flagids" json:"flagids"` // Flag IDs associated with this flow
 }
 
 type Database struct {
 	client *mongo.Client
+}
+
+// GetFlowList implements filtering logic similar to the Python getFlowList
+func (db Database) GetFlowList(filters map[string]any) ([]FlowEntry, error) {
+	// TODO: use a struct and echo unmarshalling
+
+	collection := db.client.Database("pcap").Collection("pcap")
+	query := bson.M{}
+
+	// Handle "flow.data" regex search
+	if v, ok := filters["flow.data"]; ok {
+		query["flow.data"] = bson.M{"$regex": v, "$options": "i"}
+	}
+	if v, ok := filters["dst_ip"]; ok {
+		query["dst_ip"] = v
+	}
+	if v, ok := filters["dst_port"]; ok {
+		port, _ := toInt(v)
+		if port == -1 {
+			delete(query, "dst_ip")
+			// You may want to fetch the list of service ports from config or env
+			// For now, just exclude -1
+			query["dst_port"] = bson.M{"$nin": []int{-1}}
+		} else {
+			query["dst_port"] = port
+		}
+	}
+	if from, ok := filters["from_time"]; ok {
+		if to, ok2 := filters["to_time"]; ok2 {
+			query["time"] = bson.M{
+				"$gte": toIntMust(from),
+				"$lt":  toIntMust(to),
+			}
+		}
+	}
+	tagQueries := bson.M{}
+	if v, ok := filters["includeTags"]; ok {
+		arr := toStringSlice(v)
+		if len(arr) > 0 {
+			tagQueries["$all"] = arr
+		}
+	}
+	if v, ok := filters["excludeTags"]; ok {
+		arr := toStringSlice(v)
+		if len(arr) > 0 {
+			tagQueries["$nin"] = arr
+		}
+	}
+	if len(tagQueries) > 0 {
+		query["tags"] = tagQueries
+	}
+
+	cur, err := collection.Find(context.TODO(), query, options.Find().SetSort(bson.M{"time": -1}).SetLimit(100))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(context.TODO())
+
+	var results []FlowEntry
+	for cur.Next(context.TODO()) {
+		var entry FlowEntry
+		if err := cur.Decode(&entry); err == nil {
+			results = append(results, entry)
+		}
+	}
+	return results, nil
+}
+
+// GetTagList returns all tag names (_id) from the tags collection
+func (db Database) GetTagList() ([]string, error) {
+	collection := db.client.Database("pcap").Collection("tags")
+	cur, err := collection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(context.TODO())
+
+	var tags []string
+	for cur.Next(context.TODO()) {
+		var tag struct {
+			ID string `bson:"_id"`
+		}
+		if err := cur.Decode(&tag); err == nil {
+			tags = append(tags, tag.ID)
+		}
+	}
+	return tags, nil
+}
+
+// GetSignature returns a signature document by its integer ID or ObjectID string
+func (db Database) GetSignature(id string) (Signature, error) {
+	collection := db.client.Database("pcap").Collection("signatures")
+	var result Signature
+	// Try as ObjectID first
+	objID, err := primitive.ObjectIDFromHex(id)
+	filter := bson.M{}
+	if err == nil {
+		filter = bson.M{"_id": objID}
+	} else {
+		// Try as int
+		intID, err2 := toInt(id)
+		if err2 != nil {
+			return result, fmt.Errorf("invalid id: %v", id)
+		}
+		filter = bson.M{"id": intID}
+	}
+	err = collection.FindOne(context.TODO(), filter).Decode(&result)
+	return result, err
+}
+
+// SetStar sets or unsets the "starred" tag on a flow
+func (db Database) SetStar(flowID string, star bool) error {
+	collection := db.client.Database("pcap").Collection("pcap")
+	objID, err := primitive.ObjectIDFromHex(flowID)
+	if err != nil {
+		return err
+	}
+	update := bson.M{}
+	if star {
+		update = bson.M{"$push": bson.M{"tags": "starred"}}
+	} else {
+		update = bson.M{"$pull": bson.M{"tags": "starred"}}
+	}
+	_, err = collection.UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
+	return err
+}
+
+// GetFlowDetail returns a flow by its ObjectID string, including signatures
+func (db Database) GetFlowDetail(id string) (*FlowEntry, error) {
+	collection := db.client.Database("pcap").Collection("pcap")
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	var flow FlowEntry
+	if err := collection.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&flow); err != nil {
+		return nil, err
+	}
+
+	// Attach signatures if present (unchanged)
+	if len(flow.Suricata) > 0 {
+		sigColl := db.client.Database("pcap").Collection("signatures")
+		var sigs []Signature
+		for _, sigID := range flow.Suricata {
+			var sig Signature
+			err := sigColl.FindOne(context.TODO(), bson.M{"id": sigID}).Decode(&sig)
+			if err == nil {
+				sigs = append(sigs, sig)
+			}
+		}
+		// Optionally, you can add a Signatures field to FlowEntry to hold these
+		// For now, just ignore if not present in struct
+	}
+
+	return &flow, nil
+}
+
+// --- helpers for filter conversion ---
+func toInt(v any) (int, error) {
+	switch t := v.(type) {
+	case int:
+		return t, nil
+	case int32:
+		return int(t), nil
+	case int64:
+		return int(t), nil
+	case float64:
+		return int(t), nil
+	case string:
+		return strconv.Atoi(t)
+	default:
+		return 0, fmt.Errorf("not an int: %v", v)
+	}
+}
+func toIntMust(v any) int {
+	i, err := toInt(v)
+	if err != nil {
+		panic(fmt.Sprintf("toIntMust failed: %v", err))
+	}
+	return i
+}
+func toStringSlice(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		var arr []string
+		for _, x := range t {
+			arr = append(arr, fmt.Sprintf("%v", x))
+		}
+		return arr
+	default:
+		return nil
+	}
 }
 
 func ConnectMongo(uri string) Database {
@@ -142,7 +333,7 @@ func (db Database) InsertFlow(flow FlowEntry) {
 		// There is a connected flow
 		if err == nil {
 			//TODO Maybe add the childs fingerprints to mine?
-			flow.Child_id = connFlow.MongoID
+			flow.ChildId = connFlow.MongoID
 		}
 	}
 
@@ -153,11 +344,11 @@ func (db Database) InsertFlow(flow FlowEntry) {
 		log.Println("NO PCAP DATA WILL BE AVAILABLE FOR: ", flow.Filename)
 	}
 
-	if flow.Child_id == primitive.NilObjectID {
+	if flow.ChildId == primitive.NilObjectID {
 		return
 	}
 
-	query := bson.M{"_id": flow.Child_id}
+	query := bson.M{"_id": flow.ChildId}
 
 	info := bson.M{"$set": bson.M{"parent_id": insertion.InsertedID}}
 

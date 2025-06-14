@@ -170,7 +170,7 @@ function TimePacketGraph(graphProps: GraphProps) {
       type: "datetime", // FIXME: Timezone is not displayed correctly
     },
     labels: flowList.map((flow) => {
-      return flow._id.$oid;
+      return flow._id;
     }),
     chart: {
       animations: {
@@ -260,7 +260,7 @@ function VolumeGraph(graphProps: GraphProps) {
       type: "datetime", // FIXME: Timezone is not displayed correctly
     },
     labels: flowList.map((flow) => {
-      return flow._id.$oid;
+      return flow._id;
     }),
     chart: {
       animations: {

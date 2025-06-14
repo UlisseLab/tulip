@@ -1,10 +1,4 @@
 services:
-  mongo:
-    image: mongo:8
-    restart: always
-    ports:
-      - "127.0.0.1:27017:27017" # Only expose to localhost
-
   frontend:
     build:
       context: frontend
@@ -22,7 +16,9 @@ services:
       API_SERVER_ENDPOINT: http://api:5000/
 
   api:
-    build: services/api
+    build:
+      context: services/
+      target: api
     restart: unless-stopped
 
     depends_on:
@@ -38,12 +34,12 @@ services:
       TICK_START: ${TICK_START}
       TICK_LENGTH: ${TICK_LENGTH}
       VM_IP: ${VM_IP}
+      GAME_SERVICES: ${GAME_SERVICES}
 
   flagids:
     restart: on-failure
     build: services/flagids
     image: tulip-flagids:latest
-
     depends_on:
       - mongo
 
@@ -57,7 +53,7 @@ services:
 
   assembler:
     build:
-      context: services/go-importer
+      context: services/
       target: assembler
     image: tulip-assembler:latest
     restart: unless-stopped
@@ -83,7 +79,7 @@ services:
 
   enricher:
     build:
-      context: services/go-importer
+      context: services/
       target: enricher
     image: tulip-enricher:latest
     restart: unless-stopped
@@ -106,10 +102,16 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:host-gateway" # for PCAP-over-ip
     tty: true
 
   redis:
     hostname: redis
     image: redis:8
     restart: unless-stopped
+
+  mongo:
+    image: mongo:8
+    restart: always
+    ports:
+      - "127.0.0.1:27017:27017" # Only expose to localhost

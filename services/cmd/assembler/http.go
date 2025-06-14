@@ -3,13 +3,13 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"go-importer/internal/pkg/db"
 	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"tulip/pkg/db"
 
 	"github.com/andybalholm/brotli"
 )
@@ -35,7 +35,7 @@ func ParseHttpFlow(flow *db.FlowEntry) {
 	// Use a set to get rid of duplicates
 	fingerprintsSet := make(map[uint32]bool)
 
-	for idx := 0; idx < len(flow.Flow); idx++ {
+	for idx := range flow.Flow {
 		flowItem := &flow.Flow[idx]
 		// TODO; rethink the flowItem format to make this less clunky
 		reader := bufio.NewReader(strings.NewReader(flowItem.Data))

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"go-importer/internal/pkg/db"
+	"tulip/pkg/db"
 
 	"log"
 	"regexp"

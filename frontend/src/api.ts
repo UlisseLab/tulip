@@ -83,7 +83,7 @@ export const tulipApi = createApi({
       //   const patchResult = dispatch(
       //     tulipApi.util.updateQueryData("getFlows", undefined, (flows) => {
       //       // The `flows` is Immer-wrapped and can be "mutated" like in createSlice
-      //       const flow = flows.find((flow) => flow._id.$oid === id);
+      //       const flow = flows.find((flow) => flow._id === id);
       //       if (flow) {
       //         if (star) {
       //           flow.tags.push("starred");
