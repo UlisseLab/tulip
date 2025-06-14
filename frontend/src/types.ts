@@ -28,9 +28,7 @@ export interface FullFlow extends Flow {
   flow: FlowData[];
 }
 
-export interface Id {
-  $oid: string;
-}
+export type Id = string;
 
 export interface FlowData {
   from: string;

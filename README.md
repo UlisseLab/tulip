@@ -1,21 +1,25 @@
 # 🌷 Tulip
 
-Tulip is a flow analyzer meant for use during Attack / Defence CTF competitions. It allows players to easily find some traffic related to their service and automatically generates python snippets to replicate attacks.
+Tulip is a flow analyzer meant for use during Attack / Defence CTF competitions.
+
+It allows players to easily find some traffic related to their service and automatically generates python snippets to replicate attacks.
 
 ## Origins
 
-Tulip was developed by Team Europe for use in the first International Cyber Security Challenge. The project is a fork of [flower](https://github.com/secgroup/flower), but it contains quite some changes:
+Tulip was developed by Team Europe for use in the first International Cyber Security Challenge. This is the official fork of the Ulisse CTF Team.
 
-* New front-end (typescript / react / tailwind)
-* New ingestor code, based on gopacket
-* IPv6 support
-* Vastly improved filter and tagging system.
-* Deep links for easy collaboration
-* Added an http decoding pass for compressed data
-* Synchronized with Suricata.
-* Flow diffing
-* Time and size-based plots for correlation.
-* Linking HTTP sessions together based on cookies (Experimental, disabled by default)
+Originally, Tulip was based on the [flower](https://github.com/secgroup/flower), but it contains quite some changes:
+
+- New front-end (typescript / react / tailwind)
+- New ingestor code, based on gopacket
+- IPv6 support
+- Vastly improved filter and tagging system.
+- Deep links for easy collaboration
+- Added an http decoding pass for compressed data
+- Synchronized with Suricata.
+- Flow diffing
+- Time and size-based plots for correlation.
+- Linking HTTP sessions together based on cookies (Experimental, disabled by default)
 
 ## Screenshots
 
@@ -25,20 +29,9 @@ Tulip was developed by Team Europe for use in the first International Cyber Secu
 
 ## Configuration
 
-Before starting the stack, edit `services/configurations.py`:
+All configuration is done through the `.env` file.
 
-```python
-vm_ip = "10.60.4.1"
-services = [{"ip": vm_ip, "port": 18080, "name": "BIOMarkt"},
-            {"ip": vm_ip, "port": 5555, "name": "SaaS"},
-]
-```
-
-You can also edit this during the CTF, just rebuild the `api` service:
-
-```shell
-docker-compose up --build -d api
-```
+You can find example values and descriptions in the `.env.example` file.
 
 ## Usage
 
@@ -46,8 +39,8 @@ The stack can be started with docker-compose, after creating an `.env` file. See
 
 ```shell
 cp .env.example .env
-# < Edit the .env file with your favourite text editor >
-docker-compose up -d --build
+# Now edit the .env file with your favourite text editor...
+docker compose up -d --build
 ```
 
 ### Ingesting traffic
@@ -88,19 +81,19 @@ Suricata alerts are read directly from the `eve.json` file. Because this file ca
 
 ```yaml
 # ...
-  - eve-log:
-      enabled: yes
-      filetype: regular #regular|syslog|unix_dgram|unix_stream|redis
-      filename: eve.json
-      pcap-file: false
-      community-id: false
-      community-id-seed: 0
-      types:
-        - alert:
-            metadata: yes
-            # Enable the logging of tagged packets for rules using the
-            # "tag" keyword.
-            tagged-packets: yes
+- eve-log:
+    enabled: yes
+    filetype: regular #regular|syslog|unix_dgram|unix_stream|redis
+    filename: eve.json
+    pcap-file: false
+    community-id: false
+    community-id-seed: 0
+    types:
+      - alert:
+          metadata: yes
+          # Enable the logging of tagged packets for rules using the
+          # "tag" keyword.
+          tagged-packets: yes
 # ...
 ```
 
