@@ -6,9 +6,7 @@ services:
       - "127.0.0.1:27017:27017" # Only expose to localhost
 
   frontend:
-    build:
-      context: frontend
-      dockerfile: Dockerfile-frontend
+    build: frontend
     image: tulip-frontend:latest
     restart: unless-stopped
     ports:

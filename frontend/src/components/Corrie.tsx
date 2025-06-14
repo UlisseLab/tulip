@@ -1,6 +1,6 @@
-import { useSearchParams, useParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useCallback } from "react";
-import { Flow } from "../types";
+import type { Flow } from "../types";
 import {
   SERVICE_FILTER_KEY,
   TEXT_FILTER_KEY,
@@ -12,7 +12,7 @@ import {
 import useDebounce from "../hooks/useDebounce";
 
 import ReactApexChart from "react-apexcharts";
-import { ApexOptions } from "apexcharts";
+import type { ApexOptions } from "apexcharts";
 import { useGetFlowsQuery, useGetServicesQuery } from "../api";
 import { useAppSelector } from "../store";
 
@@ -24,7 +24,7 @@ interface GraphProps {
   onClickNavigate: (a: string) => void;
 }
 
-export const Corrie = () => {
+export function Corrie() {
   const { data: services } = useGetServicesQuery();
   const includeTags = useAppSelector((state) => state.filter.includeTags);
   const excludeTags = useAppSelector((state) => state.filter.excludeTags);
@@ -43,7 +43,7 @@ export const Corrie = () => {
 
   const debounced_text_filter = useDebounce(text_filter, 300);
 
-  const { data: flowData, isLoading } = useGetFlowsQuery(
+  const { data: flowData } = useGetFlowsQuery(
     {
       "flow.data": debounced_text_filter,
       dst_ip: service?.ip,
@@ -115,7 +115,9 @@ export const Corrie = () => {
             packets
           </button>
           <button
-            className={mode == "volume" ? activeButtonClass : inactiveButtonClass}
+            className={
+              mode == "volume" ? activeButtonClass : inactiveButtonClass
+            }
             onClick={() => setCorrelationMode("volume")}
           >
             volume
@@ -128,7 +130,7 @@ export const Corrie = () => {
       </div>
     </div>
   );
-};
+}
 
 function TimePacketGraph(graphProps: GraphProps) {
   const flowList = graphProps.flowList;
@@ -177,13 +179,13 @@ function TimePacketGraph(graphProps: GraphProps) {
         enabled: false,
       },
       events: {
-        dataPointSelection: (event: any, chartContext: any, config: any) => {
+        dataPointSelection: (_event, _chartContext, config) => {
           // Retrieve flowList from chart's labels. This is hacky, refer to FIXME above.
           const flowIdList = config.w.config.labels;
           const flow = flowIdList[config.dataPointIndex];
           onClickNavigate(`/flow/${flow}?${searchParams}`);
         },
-        beforeZoom: function (chartContext, { xaxis }) {
+        beforeZoom: function (_chartContext, { xaxis }) {
           const start = Math.floor(xaxis.min);
           const end = Math.ceil(xaxis.max);
           searchParams.set(START_FILTER_KEY, start.toString());
@@ -207,12 +209,11 @@ function TimePacketGraph(graphProps: GraphProps) {
 
 function VolumeGraph(graphProps: GraphProps) {
   const flowList = graphProps.flowList;
-  const mode = graphProps.mode;
   const searchParams = graphProps.searchParams;
   const setSearchParams = graphProps.setSearchParams;
 
   function chunkData(flowList: Flow[]) {
-    let ret: any = [];
+    const ret: { x: number; y: number }[] = [];
     let ts = 0;
     let acc = 0;
     const window_size = 30000;
@@ -267,7 +268,7 @@ function VolumeGraph(graphProps: GraphProps) {
         enabled: false,
       },
       events: {
-        beforeZoom: function (chartContext, { xaxis }) {
+        beforeZoom: (_chartContext, { xaxis }) => {
           const start = Math.floor(xaxis.min);
           const end = Math.ceil(xaxis.max);
           searchParams.set(START_FILTER_KEY, start.toString());
@@ -280,3 +281,5 @@ function VolumeGraph(graphProps: GraphProps) {
 
   return <ReactApexChart options={options} series={series_out} type="line" />;
 }
+
+export default Corrie;

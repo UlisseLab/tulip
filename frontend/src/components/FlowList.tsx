@@ -6,7 +6,7 @@ import {
 } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import { Flow } from "../types";
+import type { Flow } from "../types";
 import {
   SERVICE_FILTER_KEY,
   TEXT_FILTER_KEY,
@@ -23,7 +23,7 @@ import { HeartIcon as EmptyHeartIcon } from "@heroicons/react/outline";
 import classes from "./FlowList.module.css";
 import { format } from "date-fns";
 import useDebounce from "../hooks/useDebounce";
-import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import classNames from "classnames";
 import { Tag } from "./Tag";
 import {
@@ -34,8 +34,8 @@ import {
 } from "../api";
 
 export function FlowList() {
-  let [searchParams] = useSearchParams();
-  let params = useParams();
+  const [searchParams] = useSearchParams();
+  const params = useParams();
 
   // we add a local variable to prevent racing with the browser location API
   let openedFlowID = params.id;
@@ -111,7 +111,7 @@ export function FlowList() {
       behavior: "auto",
       done: () => {
         if (transformedFlowData && transformedFlowData[flowIndex ?? 0]) {
-          let idAtIndex = transformedFlowData[flowIndex ?? 0]._id.$oid;
+          const idAtIndex = transformedFlowData[flowIndex ?? 0]._id.$oid;
           // if the current flow ID at the index indeed did change (ie because of keyboard navigation), we need to update the URL as well as local ID
           if (idAtIndex !== openedFlowID) {
             navigate(`/flow/${idAtIndex}?${searchParams}`);

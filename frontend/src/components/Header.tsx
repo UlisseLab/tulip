@@ -1,4 +1,3 @@
-import { format, parse } from "date-fns";
 import { Suspense, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import {
@@ -7,7 +6,6 @@ import {
   useSearchParams,
   useNavigate,
 } from "react-router-dom";
-import ReactDiffViewer from "react-diff-viewer";
 
 import {
   END_FILTER_KEY,
@@ -19,11 +17,8 @@ import {
   SERVICE_REFETCH_INTERVAL_MS,
   TICK_REFETCH_INTERVAL_MS,
 } from "../const";
-import {
-  useGetFlowQuery,
-  useGetServicesQuery,
-  useGetTickInfoQuery,
-} from "../api";
+
+import { useGetServicesQuery, useGetTickInfoQuery } from "../api";
 
 function ServiceSelection() {
   const FILTER_KEY = SERVICE_FILTER_KEY;
@@ -241,7 +236,7 @@ function FirstDiff() {
       placeholder="First Diff ID"
       readOnly
       value={firstFlow}
-      onClick={(event) => setFirstDiffFlow()}
+      onClick={(_event) => setFirstDiffFlow()}
       onContextMenu={(event) => {
         searchParams.delete(FIRST_DIFF_KEY);
         setFirstFlow("");
@@ -282,7 +277,7 @@ function SecondDiff() {
       placeholder="Second Flow ID"
       readOnly
       value={secondFlow}
-      onClick={(event) => setSecondDiffFlow()}
+      onClick={(_event) => setSecondDiffFlow()}
       onContextMenu={(event) => {
         searchParams.delete(SECOND_DIFF_KEY);
         setSecondFlow("");
@@ -294,11 +289,9 @@ function SecondDiff() {
 }
 
 function Diff() {
-  let params = useParams();
-
-  let [searchParams] = useSearchParams();
-
-  let navigate = useNavigate();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   function navigateToDiff() {
     navigate(`/diff/${params.id ?? ""}?${searchParams}`, { replace: true });
@@ -323,7 +316,7 @@ function Diff() {
 import ulisseImg from "../../assets/Logo_60.png";
 
 export function Header() {
-  let [searchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { setToLastnTicks, currentTick, setTimeParam } = useMessyTimeStuff();
 
   useHotkeys("a", () => setToLastnTicks(5));
