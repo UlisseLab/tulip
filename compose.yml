@@ -37,7 +37,6 @@ services:
   flagids:
     restart: on-failure
     build: services/flagids
-    image: tulip-flagids:latest
     depends_on:
       - mongo
 
@@ -79,7 +78,6 @@ services:
     build:
       context: services/
       target: enricher
-    image: tulip-enricher:latest
     restart: unless-stopped
     depends_on:
       - mongo
@@ -87,6 +85,18 @@ services:
     environment:
       TULIP_MONGO: ${TULIP_MONGO}
       REDIS_URL: redis://redis:6379
+
+  mcp:
+    build:
+      context: services/
+      target: mcp
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    ports:
+      - "8080:8080"
+    environment:
+      MONGO_HOST: ${TULIP_MONGO}
 
   suricata:
     build: services/suricata

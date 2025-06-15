@@ -16,7 +16,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -v ./... \
     && go build -v -o enricher ./cmd/enricher \
     && go build -v -o assembler ./cmd/assembler \
-    && go build -v -o api ./cmd/api
+    && go build -v -o api ./cmd/api \
+    && go build -v -o mcp ./cmd/mcp
 
 ### BASE IMAGE
 FROM alpine:${ALPINE_VERSION} AS base
@@ -43,3 +44,11 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /build/api ./
 CMD ["./api"]
+
+### MCP
+FROM base AS mcp
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+COPY --from=builder /build/mcp ./
+CMD ["./mcp"]

@@ -10,6 +10,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
+	github.com/mark3labs/mcp-go v0.32.0
 	github.com/redis/go-redis/v9 v9.10.0
 	github.com/tidwall/gjson v1.18.0
 	go.mongodb.org/mongo-driver v1.17.4
@@ -26,6 +27,7 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
@@ -35,6 +37,7 @@ require (
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/spf13/cast v1.7.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -43,6 +46,7 @@ require (
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect

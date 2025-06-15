@@ -51,78 +51,46 @@ type Database struct {
 }
 
 // GetFlowList implements filtering logic similar to the Python getFlowList
-func (db Database) GetFlowList(filters map[string]any) ([]FlowEntry, error) {
-	// TODO: use a struct and echo unmarshalling
-
+func (db Database) GetFlowList(filters bson.M) ([]FlowEntry, error) {
 	collection := db.client.Database("pcap").Collection("pcap")
-	query := bson.M{}
 
-	// Handle "flow.data" regex search
-	if v, ok := filters["flow.data"]; ok {
-		query["flow.data"] = bson.M{"$regex": v, "$options": "i"}
-	}
-	if v, ok := filters["dst_ip"]; ok {
-		query["dst_ip"] = v
-	}
-	if v, ok := filters["dst_port"]; ok {
-		port, _ := toInt(v)
-		if port == -1 {
-			delete(query, "dst_ip")
-			// You may want to fetch the list of service ports from config or env
-			// For now, just exclude -1
-			query["dst_port"] = bson.M{"$nin": []int{-1}}
-		} else {
-			query["dst_port"] = port
-		}
-	}
-	if from, ok := filters["from_time"]; ok {
-		if to, ok2 := filters["to_time"]; ok2 {
-			query["time"] = bson.M{
-				"$gte": toIntMust(from),
-				"$lt":  toIntMust(to),
-			}
-		}
-	}
-	tagQueries := bson.M{}
-	if v, ok := filters["includeTags"]; ok {
-		arr := toStringSlice(v)
-		if len(arr) > 0 {
-			tagQueries["$all"] = arr
-		}
-	}
-	if v, ok := filters["excludeTags"]; ok {
-		arr := toStringSlice(v)
-		if len(arr) > 0 {
-			tagQueries["$nin"] = arr
-		}
-	}
-	if len(tagQueries) > 0 {
-		query["tags"] = tagQueries
+	opt := options.Find().
+		SetSort(bson.M{"time": -1}).      // Sort by time descending
+		SetProjection(bson.M{"flow": 0}). // Exclude flow details for performance
+		SetLimit(100)                     // Limit to 100 results
+
+	// If filters are nil, use an empty filter
+	if filters == nil {
+		filters = bson.M{}
 	}
 
-	cur, err := collection.Find(context.TODO(), query, options.Find().SetSort(bson.M{"time": -1}).SetLimit(100))
+	cur, err := collection.Find(context.TODO(), filters, opt)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to find flows: %v", err)
 	}
+	// Ensure the cursor is closed after use
 	defer cur.Close(context.TODO())
 
-	var results []FlowEntry
+	results := make([]FlowEntry, 0)
 	for cur.Next(context.TODO()) {
 		var entry FlowEntry
 		if err := cur.Decode(&entry); err == nil {
 			results = append(results, entry)
 		}
 	}
+
 	return results, nil
 }
 
 // GetTagList returns all tag names (_id) from the tags collection
 func (db Database) GetTagList() ([]string, error) {
 	collection := db.client.Database("pcap").Collection("tags")
+
 	cur, err := collection.Find(context.TODO(), bson.M{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to find tags: %v", err)
 	}
+
 	defer cur.Close(context.TODO())
 
 	var tags []string
@@ -143,10 +111,9 @@ func (db Database) GetSignature(id string) (Signature, error) {
 	var result Signature
 	// Try as ObjectID first
 	objID, err := primitive.ObjectIDFromHex(id)
-	filter := bson.M{}
-	if err == nil {
-		filter = bson.M{"_id": objID}
-	} else {
+
+	filter := bson.M{"_id": objID}
+	if err != nil {
 		// Try as int
 		intID, err2 := toInt(id)
 		if err2 != nil {
@@ -154,6 +121,7 @@ func (db Database) GetSignature(id string) (Signature, error) {
 		}
 		filter = bson.M{"id": intID}
 	}
+
 	err = collection.FindOne(context.TODO(), filter).Decode(&result)
 	return result, err
 }
@@ -220,27 +188,6 @@ func toInt(v any) (int, error) {
 		return strconv.Atoi(t)
 	default:
 		return 0, fmt.Errorf("not an int: %v", v)
-	}
-}
-func toIntMust(v any) int {
-	i, err := toInt(v)
-	if err != nil {
-		panic(fmt.Sprintf("toIntMust failed: %v", err))
-	}
-	return i
-}
-func toStringSlice(v any) []string {
-	switch t := v.(type) {
-	case []string:
-		return t
-	case []any:
-		var arr []string
-		for _, x := range t {
-			arr = append(arr, fmt.Sprintf("%v", x))
-		}
-		return arr
-	default:
-		return nil
 	}
 }
 
@@ -580,4 +527,116 @@ func (db Database) GetFlagids(flaglifetime int) ([]Flagid, error) {
 
 	return flagids, nil
 
+}
+
+func (db Database) GetLastFlows(ctx context.Context, limit int) ([]FlowEntry, error) {
+	collection := db.client.Database("pcap").Collection("pcap")
+
+	opts := options.Find().SetSort(bson.M{"time": -1}).SetLimit(int64(limit))
+	cur, err := collection.Find(ctx, bson.M{}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find last flows: %v", err)
+	}
+	defer cur.Close(ctx)
+
+	var results []FlowEntry
+	for cur.Next(ctx) {
+		var entry FlowEntry
+		if err := cur.Decode(&entry); err == nil {
+			results = append(results, entry)
+		}
+	}
+	return results, nil
+}
+
+type GetFlowsOptions struct {
+	FromTime    int64
+	ToTime      int64
+	IncludeTags []string
+	ExcludeTags []string
+	DstPort     int
+	DstIp       string
+	SrcPort     int
+	SrcIp       string
+	Limit       int
+}
+
+func (db Database) GetFlows(ctx context.Context, opts *GetFlowsOptions) ([]FlowEntry, error) {
+	collection := db.client.Database("pcap").Collection("pcap")
+	query := bson.M{}
+
+	findOpts := options.Find().
+		SetSort(bson.M{"time": -1})
+
+	if opts != nil {
+		if opts.Limit > 0 {
+			findOpts.SetLimit(int64(opts.Limit))
+		} else {
+			findOpts.SetLimit(100) // Default limit if not specified
+		}
+
+		timeQuery := bson.M{}
+		if opts.FromTime > 0 {
+			timeQuery["$gte"] = opts.FromTime
+		}
+		if opts.ToTime > 0 {
+			timeQuery["$lt"] = opts.ToTime
+		}
+
+		if len(timeQuery) > 0 {
+			query["time"] = timeQuery
+		}
+
+		if opts.DstPort > 0 {
+			query["dst_port"] = opts.DstPort
+		}
+		if opts.DstIp != "" {
+			query["dst_ip"] = opts.DstIp
+		}
+		if opts.SrcPort > 0 {
+			query["src_port"] = opts.SrcPort
+		}
+		if opts.SrcIp != "" {
+			query["src_ip"] = opts.SrcIp
+		}
+
+		tagQueries := bson.M{}
+		if len(opts.IncludeTags) > 0 {
+			tagQueries["$all"] = opts.IncludeTags
+		}
+		if len(opts.ExcludeTags) > 0 {
+			tagQueries["$nin"] = opts.ExcludeTags
+		}
+		if len(tagQueries) > 0 {
+			query["tags"] = tagQueries
+		}
+	}
+
+	cur, err := collection.Find(ctx, query, findOpts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find flows: %v", err)
+	}
+	defer cur.Close(ctx)
+
+	var results []FlowEntry
+	for cur.Next(ctx) {
+		var entry FlowEntry
+		if err := cur.Decode(&entry); err == nil {
+			results = append(results, entry)
+		}
+	}
+	return results, nil
+}
+
+func (db Database) GetFlowByID(ctx context.Context, id string) (*FlowEntry, error) {
+	collection := db.client.Database("pcap").Collection("pcap")
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	var flow FlowEntry
+	if err := collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&flow); err != nil {
+		return nil, err
+	}
+	return &flow, nil
 }
