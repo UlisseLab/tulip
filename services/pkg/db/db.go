@@ -55,9 +55,8 @@ func (db Database) GetFlowList(filters bson.M) ([]FlowEntry, error) {
 	collection := db.client.Database("pcap").Collection("pcap")
 
 	opt := options.Find().
-		SetSort(bson.M{"time": -1}).      // Sort by time descending
-		SetProjection(bson.M{"flow": 0}). // Exclude flow details for performance
-		SetLimit(100)                     // Limit to 100 results
+		SetSort(bson.M{"time": -1}).     // Sort by time descending
+		SetProjection(bson.M{"flow": 0}) // Exclude flow details for performance
 
 	// If filters are nil, use an empty filter
 	if filters == nil {
