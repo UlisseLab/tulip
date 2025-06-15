@@ -559,6 +559,6 @@ func (service AssemblerService) ProcessPcapHandle(handle *pcap.Handle, fname str
 		}
 	}
 
-	log.Print("Processed %d packets from %s", count-processedCount, fname)
+	log.Printf("Processed %d packets from %s", count-processedCount, fname)
 	g_db.InsertPcap(fname, count)
 }
