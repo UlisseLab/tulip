@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"tulip/pkg/db"
 
 	"github.com/charmbracelet/log"
@@ -141,6 +142,16 @@ func addTools(mcpServ *server.MCPServer, database *db.Database) {
 		},
 	)
 
+	strToClientServer := func(str string) string {
+		if str == "c" {
+			return "Client to Server"
+		} else if str == "s" {
+			return "Server to Client"
+		} else {
+			return "Unknown Direction"
+		}
+	}
+
 	mcpServ.AddTool(
 		mcp.NewTool(
 			"getFlow",
@@ -161,23 +172,27 @@ func addTools(mcpServ *server.MCPServer, database *db.Database) {
 				return mcp.NewToolResultError("Flow not found"), nil
 			}
 
-			content := bytes.NewBufferString("Flow Details:\n")
-			fmt.Fprintf(content, "\tFlow ID: %s\n", flow.Id)
-			fmt.Fprintf(content, "\tTimestamp: %d\n", flow.Time)
-			fmt.Fprintf(content, "\tSource: %s:%d\n", flow.SrcIp, flow.SrcPort)
-			fmt.Fprintf(content, "\tDestination: %s:%d\n", flow.DstIp, flow.DstPort)
-			fmt.Fprintf(content, "\tFound flags: %s\n", flow.Flags)
-			fmt.Fprintf(content, "\tTags: %s\n", flow.Tags)
+			content := bytes.NewBufferString("")
 
-			for i, packet := range flow.Flow {
-				fmt.Fprintf(content, "\t\tPacket %d:\n", i+1)
-				if packet.From == "c" {
-					fmt.Fprintf(content, "\t\tPacket direction: Client to Server\n")
-				} else {
-					fmt.Fprintf(content, "\t\tPacket direction: Server to Client\n")
-				}
-				fmt.Fprintf(content, "\tPacket timestamp: %d\n", packet.Time)
-				fmt.Fprintf(content, "\tPacket flags: %s\n", packet.Data)
+			fmt.Fprintf(content, "Flow ID: %s\n", flow.Id)
+			fmt.Fprintf(content, "Timestamp: %d\n", flow.Time)
+			fmt.Fprintf(content, "Source: %s:%d\n", flow.SrcIp, flow.SrcPort)
+			fmt.Fprintf(content, "Destination: %s:%d\n", flow.DstIp, flow.DstPort)
+			fmt.Fprintf(content, "Found flags: %s\n", strings.Join(flow.Flags, ", "))
+			fmt.Fprintf(content, "Tags: %s\n", strings.Join(flow.Tags, ", "))
+			fmt.Fprintf(content, "Number of messages: %d\n", len(flow.Flow))
+			fmt.Fprintf(content, "\n")
+
+			for i, message := range flow.Flow {
+				fmt.Fprintf(content, "--- Message %d ---\n", i+1)
+				fmt.Fprintf(content, "Message direction: %s\n", strToClientServer(message.From))
+				fmt.Fprintf(content, "Message timestamp: %d\n", message.Time)
+				fmt.Fprintf(content, "Message data: ```\n")
+				fmt.Fprintf(content, "%s\n", message.Data)
+				fmt.Fprintf(content, "```\n")
+				fmt.Fprintf(content, "Message data in base64: ```\n")
+				fmt.Fprintf(content, "%s\n", message.B64)
+				fmt.Fprintf(content, "```\n")
 			}
 
 			return mcp.NewToolResultText(content.String()), nil
