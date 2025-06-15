@@ -196,7 +196,7 @@ func (api *API) getServices(c echo.Context) error {
 }
 
 func (api *API) getFlagRegex(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]interface{}{"flag_regex": api.Config.FlagRegex})
+	return c.JSON(http.StatusOK, api.Config.FlagRegex)
 }
 
 func (api *API) getFlowDetail(c echo.Context) error {
