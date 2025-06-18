@@ -9,7 +9,7 @@ import (
 
 	"tulip/pkg/db"
 
-	"github.com/charmbracelet/log"
+	"log/slog"
 )
 
 func main() {
@@ -19,7 +19,8 @@ func main() {
 	// Load configuration from environment variables
 	cfg, err := LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		slog.Error("Failed to load config", slog.Any("err", err))
+		os.Exit(1)
 	}
 
 	// Initialize MongoDB connection using pkg/db
@@ -28,8 +29,6 @@ func main() {
 
 	// Set up Echo server
 	e := echo.New()
-	logger := log.New(os.Stdout)
-	httpLogger := logger.WithPrefix("HTTP")
 
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:  true,
@@ -38,7 +37,7 @@ func main() {
 		LogLatency: true,
 
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			httpLogger.Info("request",
+			slog.Info("request",
 				"status", v.Status,
 				"latency", v.Latency,
 				"method", v.Method,
@@ -60,8 +59,9 @@ func main() {
 	if port == "" {
 		port = "5000"
 	}
-	logger.Printf("Starting server on :%s", port)
+	slog.Info("Starting server", "port", port)
 	if err := e.Start(":" + port); err != nil {
-		logger.Fatalf("Echo server failed: %v", err)
+		slog.Error("Echo server failed", slog.Any("err", err))
+		os.Exit(1)
 	}
 }

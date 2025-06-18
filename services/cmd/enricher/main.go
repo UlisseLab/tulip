@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/log"
+	"log/slog"
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
 
@@ -52,19 +52,19 @@ func main() {
 	} else if *redisConn != "" {
 		watchRedis(*redisConn)
 	} else {
-		log.Warn("No eve file or redis connection supplied. Exiting.")
-		log.Warn("Usage: enricher -eve <eve_file> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
-		log.Warn("Usage: enricher -redis <redis_url> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
+		slog.Warn("No eve file or redis connection supplied. Exiting.")
+		slog.Warn("Usage: enricher -eve <eve_file> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
+		slog.Warn("Usage: enricher -redis <redis_url> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
 		os.Exit(1)
 	}
 }
 
 func watchEve(eve_file string) {
 	// Do the initial scan
-	log.Info("Parsing initial eve contents...")
+	slog.Info("Parsing initial eve contents...")
 	ratchet := updateEve(eve_file, 0)
 
-	log.Info("Monitoring eve file: ", eve_file)
+	slog.Info("Monitoring eve file", slog.String("file", eve_file))
 	stat, err := os.Stat(eve_file)
 	prevSize := int64(0)
 	if err == nil {
@@ -76,12 +76,12 @@ func watchEve(eve_file string) {
 
 		new_stat, err := os.Stat(eve_file)
 		if err != nil {
-			log.Errorf("Failed to open the eve file with error: %v", err)
+			slog.Error("Failed to open the eve file", slog.Any("err", err))
 			continue
 		}
 
 		if new_stat.Size() > prevSize {
-			log.Info("Eve file was updated. New size: %d", new_stat.Size())
+			slog.Info("Eve file was updated", slog.Int64("new_size", new_stat.Size()))
 			ratchet = updateEve(eve_file, ratchet)
 		}
 		prevSize = new_stat.Size()
@@ -96,14 +96,14 @@ func updateEve(eve_file string, ratchet int64) int64 {
 	// Open a handle to the eve file
 	eve_handle, err := os.Open(eve_file)
 	if err != nil {
-		log.Errorf("Failed to open the eve file")
+		slog.Error("Failed to open the eve file", slog.Any("err", err))
 		return ratchet
 	}
 	eve_handle.Seek(ratchet, 0)
 	eveReader := bufio.NewReader(eve_handle)
 	defer eve_handle.Close()
 
-	log.Info("Start scanning eve file @ ", ratchet)
+	slog.Info("Start scanning eve file", slog.Int64("ratchet", ratchet))
 
 	// iterate over each line in the file
 	for {
@@ -259,7 +259,7 @@ func handleEveLine(json string) (bool, error) {
 func watchRedis(redisUrl string) {
 	opt, err := redis.ParseURL(redisUrl)
 	if err != nil {
-		log.Errorf("Failed to parse redis url: %v", err)
+		slog.Error("Failed to parse redis url", slog.Any("err", err))
 		return
 	}
 
@@ -267,11 +267,11 @@ func watchRedis(redisUrl string) {
 	defer func() {
 		err := rdb.Close()
 		if err != nil {
-			log.Errorf("Failed to close redis connection: %v", err)
+			slog.Error("Failed to close redis connection", slog.Any("err", err))
 		}
 	}()
 
-	log.Info("Connected to redis")
+	slog.Info("Connected to redis")
 
 	// connect to "suricata" list and ingest the data
 	for {
@@ -282,7 +282,7 @@ func watchRedis(redisUrl string) {
 				continue
 			}
 
-			log.Warnf("Failed to pop from redis: %v", err)
+			slog.Warn("Failed to pop from redis", slog.Any("err", err))
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -291,12 +291,12 @@ func watchRedis(redisUrl string) {
 		for _, line := range lines {
 			_, err = handleEveLine(line)
 			if err != nil {
-				log.Errorf(`Failed to handle eve line "%s": %s`, line, err)
+				slog.Error("Failed to handle eve line", slog.String("line", line), slog.Any("err", err))
 				continue
 			}
 			processed++
 		}
 
-		log.Infof("Processed %d lines from redis", processed)
+		slog.Info("Processed lines from redis", slog.Int("processed", processed))
 	}
 }

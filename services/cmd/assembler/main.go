@@ -1,564 +1,205 @@
 package main
 
 import (
-	"tulip/pkg/db"
-
-	"flag"
 	"fmt"
+	"regexp"
+
+	"context"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
-	"github.com/charmbracelet/log"
-	"github.com/fsnotify/fsnotify"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/examples/util"
-	"github.com/google/gopacket/ip4defrag"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/reassembly"
+	"tulip/pkg/assembler"
+	"tulip/pkg/db"
+
+	"github.com/lmittmann/tint"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-var (
-	decoder  = ""
-	lazy     = false
-	checksum = false
-	nohttp   = true
+var gDB db.Database
 
-	snaplen = 65536
-	tstype  = ""
-	promisc = true
-)
+var rootCmd = &cobra.Command{
+	Use:   "assembler",
+	Short: "PCAP assembler TCP ingest service",
+	Long: `A network traffic assembler that listens for incoming TCP connections.
+Each connection is interpreted as a PCAP stream and ingested into MongoDB.`,
+	Run: runAssembler,
+}
 
-var (
-	watch_dir    = flag.String("dir", "", "Directory to watch for new pcaps")
-	mongodb      = flag.String("mongo", "", "MongoDB dns name + port (e.g. mongo:27017)")
-	flag_regex   = flag.String("flag", "", "flag regex, used for flag in/out tagging")
-	pcap_over_ip = flag.String("pcap-over-ip", "", "PCAP-over-IP host + port (e.g. remote:1337)")
-	bpf          = flag.String("bpf", "", "BPF filter")
-	nonstrict    = flag.Bool("nonstrict", false, "Do not check strict TCP / FSM flags")
-	experimental = flag.Bool("experimental", false, "Enable experimental features.")
-	flagid       = flag.Bool("flagid", false, "Check for flagids in traffic (must be present in mong)")
+func init() {
+	rootCmd.Flags().String("mongo", "localhost:27017", "MongoDB DNS name + port (e.g. mongo:27017)")
+	rootCmd.Flags().String("listen", "localhost:9999", "TCP address to listen on for incoming PCAP streams (e.g. :1337, 127.0.0.1:9000)")
+	rootCmd.Flags().String("flag", "", "Flag regex, used for flag in/out tagging")
+	rootCmd.Flags().String("flush-interval", "15s", "Interval for flushing connections (e.g. 15s, 1m)")
+	rootCmd.Flags().Bool("tcp-lazy", false, "Enable lazy decoding for TCP packets")
+	rootCmd.Flags().Bool("experimental", false, "Enable experimental features")
+	rootCmd.Flags().Bool("nonstrict", false, "Enable non-strict mode for TCP stream assembly")
+	rootCmd.Flags().String("connection-timeout", "30s", "Connection timeout for both TCP and UDP flows (e.g. 30s, 1m)")
 
-	ticklength   = *flag.Int("tick length", -1, "the length (in seconds) of a tick")
-	flaglifetime = *flag.Int("flag lifetime", -1, "the lifetime of a flag in ticks")
+	viper.BindPFlag("mongo", rootCmd.Flags().Lookup("mongo"))
+	viper.BindPFlag("listen", rootCmd.Flags().Lookup("listen"))
+	viper.BindPFlag("flag", rootCmd.Flags().Lookup("flag"))
+	viper.BindPFlag("flush-interval", rootCmd.Flags().Lookup("flush-interval"))
+	viper.BindPFlag("tcp-lazy", rootCmd.Flags().Lookup("tcp-lazy"))
+	viper.BindPFlag("experimental", rootCmd.Flags().Lookup("experimental"))
+	viper.BindPFlag("nonstrict", rootCmd.Flags().Lookup("nonstrict"))
+	viper.BindPFlag("connection-timeout", rootCmd.Flags().Lookup("connection-timeout"))
 
-	flushAfter = flag.String("flush-after", "30s", `(TCP) Connections which have buffered packets (they've gotten packets out of order and
-are waiting for old packets to fill the gaps) can be flushed after they're this old
-(their oldest gap is skipped). This is particularly useful for pcap-over-ip captures.
-Any string parsed by time.ParseDuration is acceptable here (ie. "3m", "2h45m").
-This setting defaults to "30s" unless specified. To prevent connection flooding,
-it is not recommended setting this to a high value, since assembler persists between pcaps.
-Setting this to empty value disables TCP flushing.`)
-	flushAfterUdp = flag.String("flush-after-udp", "30s", `Same as flush-after, except for UDP connections.
-UDP connections are assembled by unique pairings of ip addressed and ports on both sides.
-The only way a UDP connection is considered closed, is if this timeout passes without seeing any new packets.
-This setting defaults to "30s" unless specified. To prevent connection flooding,
-it is not recommended setting this to a high value, since assembler persists between pcaps.
-Setting this to empty value disables UDP flushing.`)
-	flushInterval = flag.String("flush-interval", "15s", `Period of flushing while processing one pcap.
-Any string parsed by time.ParseDuration is acceptable here (ie. "3m", "2h45m").
-Flushing always happens between pcaps, but sometimes (for example with PCAP-over-IP) it is required to flush periodically
-while processing one file (since PCAP-over-IP treats whole connection as one pcap file). This is also the period for debug prints.`)
-)
+	viper.AutomaticEnv()
+	viper.SetEnvPrefix("TULIP")
+}
 
-var g_db db.Database
+func runAssembler(cmd *cobra.Command, args []string) {
+	// Get all viper flags
+	var (
+		mongodb              = viper.GetString("mongo")
+		listenAddr           = viper.GetString("listen")
+		flagRegexStr         = viper.GetString("flag")
+		flushIntervalStr     = viper.GetString("flush-interval")
+		tcpLazy              = viper.GetBool("tcp-lazy")
+		experimental         = viper.GetBool("experimental")
+		nonstrict            = viper.GetBool("nonstrict")
+		connectionTimeoutStr = viper.GetString("connection-timeout")
+	)
 
-// flagid caching (only once per tick)
-var flagids []db.Flagid
-var flagidUpdate int64 = 0
+	// Setup logging
+	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
+		Level:      slog.LevelInfo,
+		TimeFormat: time.TimeOnly,
+	}))
+	slog.SetDefault(logger)
 
-// TODO; FIXME; RDJ; this is kinda gross, but this is PoC level code
-func reassemblyCallback(entry db.FlowEntry) {
-	// Parsing HTTP will decode encodings to a plaintext format
-	ParseHttpFlow(&entry)
+	// Connect to MongoDB
+	dbString := "mongodb://" + mongodb
+	slog.Info("Connecting to MongoDB...", slog.String("uri", dbString))
+	gDB = db.ConnectMongo(dbString)
+	slog.Info("Connected to MongoDB")
 
-	// Apply flag in / flagout
-	if *flag_regex != "" {
-		ApplyFlagTags(&entry, flag_regex)
+	slog.Info("Configuring MongoDB database...")
+	gDB.ConfigureDatabase()
+
+	// Parse flag regex if provided
+	var flagRegex *regexp.Regexp
+	if flagRegexStr != "" {
+		var err error
+		flagRegex, err = regexp.Compile(flagRegexStr)
+		if err != nil {
+			slog.Error("Invalid flag regex", slog.String("regex", flagRegexStr), slog.Any("err", err))
+			os.Exit(1)
+		}
 	}
 
-	//Apply flagid in / out
-	if *flagid {
-		unix := time.Now().Unix()
-		if flagidUpdate+int64(ticklength) < unix {
-			flagidUpdate = unix
-			zwi, err := g_db.GetFlagids(flaglifetime)
-			if err != nil {
-				log.Fatal(err)
+	// Parse flush interval
+	var flushInterval time.Duration
+	if flushIntervalStr != "" {
+		var err error
+		flushInterval, err = time.ParseDuration(flushIntervalStr)
+		if err != nil {
+			slog.Error("Invalid flush-interval", slog.String("flush-interval", flushIntervalStr), slog.Any("err", err))
+			os.Exit(1)
+		}
+	}
+
+	// Parse connection timeout
+	var connectionTimeout time.Duration
+	if connectionTimeoutStr != "" {
+		var err error
+		connectionTimeout, err = time.ParseDuration(connectionTimeoutStr)
+		if err != nil {
+			slog.Error("Invalid connection-timeout", slog.String("connection-timeout", connectionTimeoutStr), slog.Any("err", err))
+			os.Exit(1)
+		}
+	}
+
+	// Create assembler service
+	config := assembler.Config{
+		DB:                   &gDB,
+		TcpLazy:              tcpLazy,
+		Experimental:         experimental,
+		NonStrict:            nonstrict,
+		FlagRegex:            flagRegex,
+		FlushInterval:        flushInterval,
+		ConnectionTcpTimeout: connectionTimeout,
+		ConnectionUdpTimeout: connectionTimeout,
+	}
+	service := assembler.NewAssemblerService(config)
+
+	// Start TCP server
+	slog.Info("Starting TCP server", slog.String("address", listenAddr))
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		slog.Error("Failed to start TCP server", slog.Any("err", err))
+		os.Exit(1)
+	}
+	defer ln.Close()
+
+	// Handle graceful shutdown via context
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-signalChan
+		slog.Warn("Received shutdown signal, stopping server...")
+		cancel()
+		ln.Close()
+	}()
+
+	var connID int64 = 0
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				break
+			default:
+				slog.Error("Failed to accept connection", slog.Any("err", err))
+				continue
 			}
-			flagids = zwi
+			break
 		}
-		ApplyFlagids(&entry, flagids)
+		id := atomic.AddInt64(&connID, 1)
+		go handlePcapConnectionCtx(ctx, service, conn, id)
 	}
 
-	// Finally, insert the new entry
-	g_db.InsertFlow(entry)
+	slog.Info("Server stopped")
 }
 
-type AssemblerService struct {
-	Defragmenter         *ip4defrag.IPv4Defragmenter
-	StreamFactory        *TcpStreamFactory
-	StreamPool           *reassembly.StreamPool
-	AssemblerTcp         *reassembly.Assembler
-	AssemblerUdp         *UdpAssembler
-	ConnectionTcpTimeout time.Duration
-	ConnectionUdpTimeout time.Duration
-	FlushInterval        time.Duration
-	BpfFilter            string
-}
+func handlePcapConnectionCtx(ctx context.Context, service *assembler.Service, conn net.Conn, id int64) {
+	defer conn.Close()
+	clientAddr := conn.RemoteAddr().String()
+	fname := fmt.Sprintf("tcpclient-%s-%d-%d", clientAddr, id, time.Now().Unix())
+	slog.Info("Accepted new PCAP connection", slog.String("client", clientAddr), slog.String("fname", fname))
 
-func NewAssemblerService() AssemblerService {
-	streamFactory := &TcpStreamFactory{reassemblyCallback: reassemblyCallback}
-	streamPool := reassembly.NewStreamPool(streamFactory)
-	assemblerUdp := NewUdpAssembler()
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Recovered from panic in PCAP handler", slog.Any("err", r), slog.String("client", clientAddr), slog.String("fname", fname))
+			}
+			close(done)
+		}()
+		// Ingest the stream using HandlePcapStream
+		service.HandlePcapStream(conn, fname)
+	}()
 
-	return AssemblerService{
-		Defragmenter:  ip4defrag.NewIPv4Defragmenter(),
-		StreamFactory: streamFactory,
-		StreamPool:    streamPool,
-		AssemblerTcp:  reassembly.NewAssembler(streamPool),
-		AssemblerUdp:  &assemblerUdp,
-	}
-}
-
-func (service AssemblerService) FlushConnections() {
-	thresholdTcp := time.Now().Add(-service.ConnectionTcpTimeout)
-	thresholdUdp := time.Now().Add(-service.ConnectionUdpTimeout)
-	flushed, closed, discarded := 0, 0, 0
-
-	if service.ConnectionTcpTimeout != 0 {
-		flushed, closed = service.AssemblerTcp.FlushCloseOlderThan(thresholdTcp)
-		discarded = service.Defragmenter.DiscardOlderThan(thresholdTcp)
-	}
-
-	if flushed != 0 || closed != 0 || discarded != 0 {
-		log.Printf("Flushed %d, closed %d and discarded %d connections", flushed, closed, discarded)
-	}
-
-	if service.ConnectionUdpTimeout != 0 {
-		udpFlows := service.AssemblerUdp.CompleteOlderThan(thresholdUdp)
-		for _, flow := range udpFlows {
-			reassemblyCallback(*flow)
-		}
-
-		if len(udpFlows) != 0 {
-			log.Printf("Assembled %d udp flows", len(udpFlows))
-		}
+	select {
+	case <-ctx.Done():
+		slog.Warn("Context canceled, closing connection", slog.String("client", clientAddr), slog.String("fname", fname))
+		conn.Close()
+	case <-done:
+		slog.Info("Finished ingesting PCAP connection", slog.String("client", clientAddr), slog.String("fname", fname))
 	}
 }
 
 func main() {
-	defer util.Run()()
-
-	flag.Parse()
-	if flag.NArg() < 1 && *watch_dir == "" && *pcap_over_ip == "" {
-		log.Fatal("Usage: \n" +
-			"\t./go-importer <file0.pcap> ... <fileN.pcap>\n" +
-			"\t./go-importer --dir <watch_dir>\n" +
-			"\t./go-importer --pcap-over-ip <host:port>\n",
-		)
+	if err := rootCmd.Execute(); err != nil {
+		slog.Error("Command failed", slog.Any("err", err))
+		os.Exit(1)
 	}
-
-	// DELAY for testing
-	strdelay := os.Getenv("DELAY")
-	if strdelay != "" {
-		delay, err := strconv.Atoi(strdelay)
-		if err != nil {
-			log.Printf("Could not parse DELAY env variable: %v", err)
-		} else {
-			time.Sleep(time.Second * time.Duration(delay))
-		}
-	}
-
-	// get TICK_LENGTH
-	strticklength := os.Getenv("TICK_LENGTH")
-	if ticklength == -1 && strticklength != "" {
-		zwi, err := strconv.ParseInt(strticklength, 10, 64)
-		if err != nil {
-			log.Errorf("Error parsing TICK_LENGTH env variable: %v", err)
-		} else {
-			ticklength = int(zwi / 1000)
-		}
-	}
-
-	// get Flag_LIFETIME
-	strflaglifetime := os.Getenv("FLAG_LIFETIME")
-	if flaglifetime == -1 && strticklength != "" {
-		zwi, err := strconv.Atoi(strflaglifetime)
-		if err != nil {
-			log.Errorf("Error parsing FLAG_LIFETIME env variable: %v", err)
-		} else {
-			flaglifetime = zwi
-		}
-	}
-
-	if ticklength != -1 && flaglifetime != -1 {
-		flaglifetime *= ticklength
-	}
-
-	// If no mongo DB was supplied, try the env variable
-	if *mongodb == "" {
-		*mongodb = os.Getenv("TULIP_MONGO")
-		// if that didn't work, just guess a reasonable default
-		if *mongodb == "" {
-			*mongodb = "localhost:27017"
-		}
-	}
-
-	// If no flag regex was supplied via cli, check the env
-	if *flag_regex == "" {
-		*flag_regex = os.Getenv("FLAG_REGEX")
-		// if that didn't work, warn the user and continue
-		if *flag_regex == "" {
-			log.Print("WARNING; no flag regex found. No flag-in or flag-out tags will be applied.")
-		}
-	}
-
-	if *pcap_over_ip == "" {
-		*pcap_over_ip = os.Getenv("PCAP_OVER_IP")
-	}
-
-	// if flagid scans should be done
-	if !*flagid {
-		flagid_val := os.Getenv("FLAGID_SCAN")
-		*flagid = flagid_val != "" && flagid_val != "0" && !strings.EqualFold(flagid_val, "false")
-
-	}
-
-	if *bpf == "" {
-		*bpf = os.Getenv("BPF")
-	}
-
-	db_string := "mongodb://" + *mongodb
-
-	log.Printf("Connecting to MongoDB: %s...", db_string)
-	g_db = db.ConnectMongo(db_string)
-	log.Printf("Connected!")
-
-	log.Printf("Configuring MongoDB database...")
-	g_db.ConfigureDatabase()
-
-	service := NewAssemblerService()
-	service.BpfFilter = *bpf
-
-	// Parse flush duration parameter (TCP)
-	if *flushAfter != "" {
-		flushDuration, err := time.ParseDuration(*flushAfter)
-		if err != nil {
-			log.Fatal("Invalid flush-after duration: ", *flushAfter)
-		}
-
-		service.ConnectionTcpTimeout = flushDuration
-	}
-
-	// Parse flush duration parameter (UDP)
-	if *flushAfterUdp != "" {
-		flushDurationUdp, err := time.ParseDuration(*flushAfterUdp)
-		if err != nil {
-			log.Fatal("Invalid flush-after-udp duration: ", *flushAfterUdp)
-		}
-
-		service.ConnectionUdpTimeout = flushDurationUdp
-	}
-
-	// Parse flush interval
-	if *flushAfter != "" {
-		flushIntervalDuration, err := time.ParseDuration(*flushInterval)
-		if err != nil {
-			log.Fatal("Invalid flush-interval duration: ", flushIntervalDuration)
-		}
-
-		service.FlushInterval = flushIntervalDuration
-	}
-
-	// Pass positional arguments to the pcap handler
-	for _, uri := range flag.Args() {
-		service.HandlePcapUri(uri)
-	}
-
-	// If PCAP-over-IP was configured, connect to it
-	// NOTE: Configuring PCAP-over-IP ignores watch dir
-	if *pcap_over_ip != "" {
-		// for handling multiple pcap over ip
-		if strings.Contains(*pcap_over_ip, ",") {
-			pcapOverIPs := strings.Split(*pcap_over_ip, ",")
-			waitGroup := sync.WaitGroup{}
-			waitGroup.Add(len(pcapOverIPs))
-			for _, pcapIP := range pcapOverIPs {
-				go func(pcapIP string) {
-					defer waitGroup.Done()
-					connectToPCAPOverIP(service, pcapIP)
-				}(pcapIP)
-			}
-			waitGroup.Wait()
-		} else {
-			connectToPCAPOverIP(service, *pcap_over_ip)
-		}
-	} else {
-		// If a watch dir was configured, handle all files in the directory, then
-		// keep monitoring it for new files.
-		if *watch_dir != "" {
-			service.WatchDir(*watch_dir)
-		}
-	}
-}
-
-func connectToPCAPOverIP(service AssemblerService, pcapIP string) {
-	for {
-		time.Sleep(5 * time.Second)
-		log.Printf("Connecting to PCAP-over-IP: %s", pcapIP)
-
-		tcpServer, err := net.ResolveTCPAddr("tcp", pcapIP)
-		if err != nil {
-			log.Errorf("Failed to resolve PCAP-over-IP address %s: %v", pcapIP, err)
-			continue
-		}
-
-		conn, err := net.DialTCP("tcp", nil, tcpServer)
-		if err != nil {
-			log.Errorf("Failed to connect to PCAP-over-IP %s: %v", pcapIP, err)
-			continue
-		}
-
-		pcapFile, err := conn.File()
-		if err != nil {
-			log.Errorf("Failed to get file from PCAP-over-IP connection %s: %v", pcapIP, err)
-			conn.Close()
-			continue
-		}
-
-		// Name the file uniquely per connection to not skip packets on reconnect
-		fname := pcapIP + ":" + fmt.Sprintf("%d", time.Now().Unix())
-
-		log.Infof("Connected to PCAP-over-IP: %s", fname)
-		service.HandlePcapFile(pcapFile, fname)
-
-		log.Infof("Disconnected from PCAP-over-IP: %s", fname)
-		conn.Close()
-		pcapFile.Close()
-	}
-}
-
-func (service AssemblerService) WatchDir(watch_dir string) {
-	stat, err := os.Stat(watch_dir)
-	if err != nil {
-		log.Fatal("Failed to open the watch_dir with error: ", err)
-	}
-
-	if !stat.IsDir() {
-		log.Fatal("watch_dir is not a directory")
-	}
-
-	log.Printf("Monitoring dir: %s", watch_dir)
-
-	files, err := os.ReadDir(watch_dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, file := range files {
-		// accepts files with prefixes that start with .pcap (.pcapng .pcap1 etc)
-		if strings.HasPrefix(filepath.Ext(file.Name()), ".pcap") {
-			service.HandlePcapUri(filepath.Join(watch_dir, file.Name())) //FIXME; this is a little clunky
-		}
-	}
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer watcher.Close()
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	// Keep running until Interrupt
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&(fsnotify.Rename|fsnotify.Create|fsnotify.Write) != 0 {
-					// accepts files with prefixes that start with .pcap (.pcapng .pcap1 etc)
-					if strings.HasPrefix(filepath.Ext(event.Name), ".pcap") {
-						log.Printf("Found new file: %s (%s)", event.Name, event.Op.String())
-						time.Sleep(2 * time.Second) // FIXME; bit of race here between file creation and writes.
-						service.HandlePcapUri(event.Name)
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Errorf("Error in watcher: %v", err)
-			}
-		}
-	}()
-
-	err = watcher.Add(watch_dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	<-signalChan
-
-	log.Print("Watcher stopped")
-}
-
-func (service AssemblerService) HandlePcapUri(fname string) {
-	var handle *pcap.Handle
-	var err error
-
-	if handle, err = pcap.OpenOffline(fname); err != nil {
-		log.Printf("PCAP OpenOffline error: %v", err)
-		return
-	}
-	defer handle.Close()
-
-	service.ProcessPcapHandle(handle, fname)
-}
-
-func (service AssemblerService) HandlePcapFile(file *os.File, fname string) {
-	var handle *pcap.Handle
-	var err error
-
-	if handle, err = pcap.OpenOfflineFile(file); err != nil {
-		log.Printf("PCAP OpenOfflineFile error: %v", err)
-		return
-	}
-	defer handle.Close()
-
-	service.ProcessPcapHandle(handle, fname)
-}
-
-func (service AssemblerService) ProcessPcapHandle(handle *pcap.Handle, fname string) {
-	if service.BpfFilter != "" {
-		if err := handle.SetBPFFilter(service.BpfFilter); err != nil {
-			log.Errorf("Set BPF Filter error: %v", err)
-			return
-		}
-	}
-
-	processedCount := int64(0)
-
-	processedExists, processedPcap := g_db.GetPcap(fname)
-	if processedExists {
-		processedCount = processedPcap.Position
-		log.Printf("Skipped %d packets from file %s", processedCount, fname)
-	}
-
-	var source *gopacket.PacketSource
-	nodefrag := false
-	linktype := handle.LinkType()
-	switch linktype {
-	case layers.LinkTypeIPv4:
-		source = gopacket.NewPacketSource(handle, layers.LayerTypeIPv4)
-	default:
-		source = gopacket.NewPacketSource(handle, linktype)
-	}
-
-	source.Lazy = lazy
-	source.NoCopy = true
-
-	count := int64(0)
-	bytes := int64(0)
-	lastFlush := time.Now()
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	service.FlushConnections()
-
-	for packet := range source.Packets() {
-		count++
-
-		// Skip packets that were already processed from this pcap
-		if count < processedCount+1 {
-			continue
-		}
-
-		data := packet.Data()
-		bytes += int64(len(data))
-		done := false
-
-		// defrag the IPv4 packet if required
-		// (TODO; IPv6 will not be defragged)
-		ip4Layer := packet.Layer(layers.LayerTypeIPv4)
-		if !nodefrag && ip4Layer != nil {
-
-			ip4 := ip4Layer.(*layers.IPv4)
-			l := ip4.Length
-
-			newip4, err := service.Defragmenter.DefragIPv4(ip4)
-			if err != nil {
-				log.Fatalf("Error while de-fragmenting: %v", err)
-			} else if newip4 == nil {
-				continue // packet fragment, we don't have whole packet yet.
-			}
-
-			if newip4.Length != l {
-				pb, ok := packet.(gopacket.PacketBuilder)
-				if !ok {
-					panic("Not a PacketBuilder")
-				}
-				nextDecoder := newip4.NextLayerType()
-				nextDecoder.Decode(newip4.Payload, pb)
-			}
-		}
-
-		transport := packet.TransportLayer()
-		if transport == nil {
-			continue
-		}
-
-		switch transport.LayerType() {
-
-		case layers.LayerTypeTCP:
-			tcp := transport.(*layers.TCP)
-			flow := packet.NetworkLayer().NetworkFlow()
-			captureInfo := packet.Metadata().CaptureInfo
-			captureInfo.AncillaryData = []any{fname}
-			context := &Context{CaptureInfo: captureInfo}
-			service.AssemblerTcp.AssembleWithContext(flow, tcp, context)
-
-		case layers.LayerTypeUDP:
-			udp := transport.(*layers.UDP)
-			flow := packet.NetworkLayer().NetworkFlow()
-			captureInfo := packet.Metadata().CaptureInfo
-			service.AssemblerUdp.Assemble(flow, udp, &captureInfo, fname)
-
-		default:
-			log.Printf("Unsupported transport layer %s in file %s", transport.LayerType().String(), fname)
-		}
-
-		// Exit if ctx is done
-		select {
-		case <-signalChan:
-			fmt.Fprintf(os.Stderr, "\nCaught SIGINT: aborting\n")
-			done = true
-		default:
-		}
-
-		if done {
-			break
-		}
-
-		// Try flushing connections here. When using PCAP-over-IP this is required, since it treats whole connection as one pcap.
-		// NOTE: PCAP-over-IP: pcapOpenOfflineFile is blocking so we need at least see some packets passing by to get here.
-		if service.FlushInterval != 0 && lastFlush.Add(service.FlushInterval).Unix() < time.Now().Unix() {
-			service.FlushConnections()
-			log.Printf("Processed %d packets from %s", count-processedCount, fname)
-			lastFlush = time.Now()
-		}
-	}
-
-	log.Printf("Processed %d packets from %s", count-processedCount, fname)
-	g_db.InsertPcap(fname, count)
 }

@@ -34,42 +34,30 @@ services:
       VM_IP: ${VM_IP}
       GAME_SERVICES: ${GAME_SERVICES}
 
-  flagids:
-    restart: on-failure
-    build: services/flagids
-    depends_on:
-      - mongo
-
-    environment:
-      TULIP_MONGO: ${TULIP_MONGO}
-      TICK_START: ${TICK_START}
-      TICK_LENGTH: ${TICK_LENGTH}
-      FLAGID_SCRAPE: ${FLAGID_SCRAPE}
-      TEAM_ID: ${TEAM_ID}
-      FLAGID_ENDPOINT: ${FLAGID_ENDPOINT}
-
   assembler:
     build:
       context: services/
       target: assembler
-    image: tulip-assembler:latest
+
+    ports:
+      - "9999:9999"
+
     restart: unless-stopped
 
     depends_on:
       - mongo
 
-    volumes:
-      - ${TRAFFIC_DIR_HOST}:${TRAFFIC_DIR_DOCKER}:ro
-
-    command: "./assembler -dir ${TRAFFIC_DIR_DOCKER}"
-
     environment:
+      TULIP_LISTEN: ":9999"
       TULIP_MONGO: ${TULIP_MONGO}
-      FLAG_REGEX: ${FLAG_REGEX}
-      TICK_LENGTH: ${TICK_LENGTH}
-      FLAGID_SCAN: ${FLAGID_SCAN}
-      FLAG_LIFETIME: ${FLAG_LIFETIME}
-      PCAP_OVER_IP: ${PCAP_OVER_IP}
+      TULIP_FLAG: ${FLAG_REGEX}
+
+      TULIP_FLUSH_INTERVAL: "30s"
+      TULIP_CONNECTION_TIMEOUT: "1m"
+
+      TULIP_TCP_LAZY: "true"
+      TULIP_EXPERIMENTAL: "true"
+      TULIP_NONSTRICT: "true"
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
