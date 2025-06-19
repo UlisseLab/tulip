@@ -1,5 +1,7 @@
-// SPDX-FileCopyrightText: 2025 Eyad Issa
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-only
 
 package main
 
@@ -7,10 +9,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 	"tulip/pkg/db"
 
-	"github.com/charmbracelet/log"
+	"github.com/lmittmann/tint"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -19,22 +23,31 @@ func main() {
 
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Printf("Error loading configuration: %v\n", err)
+		slog.Error("Error loading configuration", slog.Any("err", err))
 		return
 	}
 
-	log.SetLevel(log.DebugLevel)
+	// Setup logging (tint handler, assembler style)
+	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
+		Level:      slog.LevelInfo,
+		TimeFormat: "2006-01-02 15:04:05",
+	}))
+	slog.SetDefault(logger)
 
 	// Initialize MongoDB connection using pkg/db
 	mongoURI := config.MongoServer()
-	mdb := db.ConnectMongo(mongoURI)
+	mdb, err := db.ConnectMongo(mongoURI)
+	if err != nil {
+		slog.Error("Failed to connect to MongoDB", slog.Any("err", err))
+		return
+	}
 
 	hooks := &server.Hooks{}
 	hooks.AddBeforeCallTool(func(ctx context.Context, id any, message *mcp.CallToolRequest) {
-		log.Debug("Tool call received", "tool_id", id, "message", message.Method)
+		slog.Debug("Tool call received", slog.Any("tool_id", id), slog.String("message", message.Method))
 	})
 	hooks.AddAfterCallTool(func(ctx context.Context, id any, message *mcp.CallToolRequest, result *mcp.CallToolResult) {
-		log.Debug("Tool call completed", "tool_id", id, "is_error", result.IsError)
+		slog.Debug("Tool call completed", slog.Any("tool_id", id), slog.Bool("is_error", result.IsError))
 	})
 
 	// Create a new MCP server
@@ -50,9 +63,9 @@ func main() {
 	httpServer := server.NewStreamableHTTPServer(mcpServ)
 
 	// Start the stdio server
-	log.Info("Starting MCP server on :8080")
+	slog.Info("Starting MCP server on :8080")
 	if err := httpServer.Start(":8080"); err != nil {
-		log.Fatalf("Failed to start MCP server: %v", err)
+		slog.Error("Failed to start MCP server", slog.Any("err", err))
 	}
 }
 
@@ -69,7 +82,7 @@ func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 				return nil, fmt.Errorf("failed to fetch flows: %v", err)
 			}
 
-			log.Debugf("fetched %d flows from the database", len(flows))
+			slog.Debug("fetched %d flows from the database", "flows", len(flows))
 
 			content := bytes.NewBufferString("Last 10 Flows:\n")
 			for _, flow := range flows {

@@ -1,3 +1,13 @@
+// SPDX-FileCopyrightText: 2022 Qyn <qyn-ctf@gmail.com>
+// SPDX-FileCopyrightText: 2022 Rick de Jager <rickdejager99@gmail.com>
+// SPDX-FileCopyrightText: 2023 - 2024 gfelber <34159565+gfelber@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 Max Groot <19346100+MaxGroot@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 liskaant <50048810+liskaant@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 liskaant <liskaant@gmail.com>
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 package db
 
 import (
@@ -197,18 +207,20 @@ func toInt(v any) (int, error) {
 	}
 }
 
-func ConnectMongo(uri string) MongoDatabase {
+func ConnectMongo(uri string) (MongoDatabase, error) {
 	client, err := mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
 	if err != nil {
-		panic(err)
+		return MongoDatabase{}, fmt.Errorf("failed to connect to MongoDB: %v", err)
 	}
+
 	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
-		panic(err)
+		client.Disconnect(context.TODO())
+		return MongoDatabase{}, fmt.Errorf("failed to ping MongoDB: %v", err)
 	}
 
 	return MongoDatabase{
 		client: client,
-	}
+	}, nil
 }
 
 func (db MongoDatabase) ConfigureDatabase() {

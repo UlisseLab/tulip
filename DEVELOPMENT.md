@@ -1,3 +1,13 @@
+<!--
+SPDX-FileCopyrightText: 2018 Nicolò Mazzucato <nicomazz@users.noreply.github.com>
+SPDX-FileCopyrightText: 2018 nicomazz_dell <nicolmazzucato@me.com>
+SPDX-FileCopyrightText: 2022 Qyn <qyn-ctf@gmail.com>
+SPDX-FileCopyrightText: 2022 Rick de Jager <rickdejager99@gmail.com>
+SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0-only
+-->
+
 # Services
 
 | Name                | Lang       | Description                                                           |

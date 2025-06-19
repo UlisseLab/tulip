@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2018 nicomazz_dell <nicolmazzucato@me.com>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

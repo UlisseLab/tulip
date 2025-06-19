@@ -1,3 +1,9 @@
+// SPDX-FileCopyrightText: 2022 Qyn <qyn-ctf@gmail.com>
+// SPDX-FileCopyrightText: 2023 liskaant <liskaant@gmail.com>
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 package assembler
 
 import (

@@ -1,3 +1,18 @@
+<!--
+SPDX-FileCopyrightText: 2018 - 2019 Nicolò Mazzucato <nicomazz@users.noreply.github.com>
+SPDX-FileCopyrightText: 2018 Marco Squarcina <lavish@users.noreply.github.com>
+SPDX-FileCopyrightText: 2018 nicomazz <nicolmazzucato@me.com>
+SPDX-FileCopyrightText: 2018 nicomazz_dell <nicolmazzucato@me.com>
+SPDX-FileCopyrightText: 2018 wert310 <310wert@gmail.com>
+SPDX-FileCopyrightText: 2019 Emiliano Ciavatta <emiliano.ciavatta@studio.unibo.it>
+SPDX-FileCopyrightText: 2020 nicomazz <nicomazz97@gmail.com>
+SPDX-FileCopyrightText: 2022 Rick de Jager <rickdejager99@gmail.com>
+SPDX-FileCopyrightText: 2022 Sijisu <mail@sijisu.eu>
+SPDX-FileCopyrightText: 2024 - 2025 Eyad Issa <eyadlorenzo@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0-only
+-->
+
 # 🌷 Tulip
 
 Tulip is a flow analyzer meant for use during Attack / Defence CTF competitions.

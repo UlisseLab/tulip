@@ -1,4 +1,9 @@
 #!/usr/bin/env sh
+
+# SPDX-FileCopyrightText: 2024 - 2025 Eyad Issa <eyadlorenzo@gmail.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-only
+
 set -euo pipefail
 
 suricata \

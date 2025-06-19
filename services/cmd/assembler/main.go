@@ -1,3 +1,15 @@
+// SPDX-FileCopyrightText: 2022 Rick de Jager <rickdejager99@gmail.com>
+// SPDX-FileCopyrightText: 2022 erdnaxe <erdnaxe@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 - 2024 gfelber <34159565+gfelber@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 - 2025 Eyad Issa <eyadlorenzo@gmail.com>
+// SPDX-FileCopyrightText: 2023 Max Groot <19346100+MaxGroot@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 Sijisu <mail@sijisu.eu>
+// SPDX-FileCopyrightText: 2023 liskaant <50048810+liskaant@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 liskaant <liskaant@gmail.com>
+// SPDX-FileCopyrightText: 2023 meme-lord <meme-lord@users.noreply.github.com>
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 package main
 
 import (
@@ -72,7 +84,12 @@ func runAssembler(cmd *cobra.Command, args []string) {
 	dbString := "mongodb://" + mongodb
 	slog.Info("Connecting to MongoDB...", slog.String("uri", dbString))
 
-	gDB = db.ConnectMongo(dbString)
+	var err error
+	gDB, err = db.ConnectMongo(dbString)
+	if err != nil {
+		slog.Error("Failed to connect to MongoDB", slog.Any("err", err))
+		os.Exit(1)
+	}
 	slog.Info("Connected to MongoDB")
 
 	slog.Info("Configuring MongoDB database...")

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
@@ -25,7 +29,10 @@ func main() {
 
 	// Initialize MongoDB connection using pkg/db
 	mongoURI := cfg.MongoServer()
-	mdb := db.ConnectMongo(mongoURI)
+	mdb, err := db.ConnectMongo(mongoURI)
+	if err != nil {
+		slog.Error("Failed to connect to MongoDB", slog.Any("err", err))
+	}
 
 	// Set up Echo server
 	e := echo.New()

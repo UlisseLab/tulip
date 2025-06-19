@@ -1,27 +1,30 @@
+// SPDX-FileCopyrightText: 2022 - 2023 Rick de Jager <rickdejager99@gmail.com>
+// SPDX-FileCopyrightText: 2022 erdnaxe <erdnaxe@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 Max Groot <19346100+MaxGroot@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2023 liskaant <liskaant@gmail.com>
+// SPDX-FileCopyrightText: 2024 - 2025 Eyad Issa <eyadlorenzo@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 package main
 
 import (
-	"bufio"
 	"context"
 	"errors"
-	"flag"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"log/slog"
+
+	"github.com/lmittmann/tint"
 	"github.com/redis/go-redis/v9"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/tidwall/gjson"
 
 	"tulip/pkg/db"
-)
-
-var (
-	eveFile      = flag.String("eve", "", "Eve file to watch for suricata's tags")
-	mongodb      = flag.String("mongo", "", "MongoDB dns name + port (e.g. mongo:27017)")
-	tagFlowbits  = flag.Bool("flowbits", true, "Tag flows with their flowbits")
-	rescanPeriod = flag.Int("t", 30, "rescan period (in seconds).")
-	redisConn    = flag.String("redis", "", "Redis connection string")
 )
 
 var gDb db.MongoDatabase
@@ -29,110 +32,58 @@ var gDb db.MongoDatabase
 const WINDOW = 5000 // ms
 
 func main() {
-	flag.Parse()
-
-	// If no mongo DB was supplied, try the env variable
-	if *mongodb == "" {
-		*mongodb = os.Getenv("TULIP_MONGO")
-		// if that didn't work, just guess a reasonable default
-		if *mongodb == "" {
-			*mongodb = "localhost:27017"
-		}
+	rootCmd := &cobra.Command{
+		Use:   "enricher",
+		Short: "Enrich flows with Suricata tags from Redis",
+		Run:   runEnricher,
 	}
 
-	if *redisConn == "" {
-		*redisConn = os.Getenv("REDIS_URL")
-	}
+	rootCmd.Flags().String("mongo", "localhost:27017", "MongoDB dns name + port (e.g. mongo:27017)")
+	rootCmd.Flags().Bool("flowbits", true, "Tag flows with their flowbits")
+	rootCmd.Flags().String("redis", "", "Redis connection string")
 
-	dbString := "mongodb://" + *mongodb
-	gDb = db.ConnectMongo(dbString)
+	viper.BindPFlag("mongo", rootCmd.Flags().Lookup("mongo"))
+	viper.BindPFlag("flowbits", rootCmd.Flags().Lookup("flowbits"))
+	viper.BindPFlag("redis", rootCmd.Flags().Lookup("redis"))
 
-	if *eveFile != "" {
-		watchEve(*eveFile)
-	} else if *redisConn != "" {
-		watchRedis(*redisConn)
-	} else {
-		slog.Warn("No eve file or redis connection supplied. Exiting.")
-		slog.Warn("Usage: enricher -eve <eve_file> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
-		slog.Warn("Usage: enricher -redis <redis_url> -mongo <mongo_db> [-t <rescan_period>] [-flowbits]")
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.SetEnvPrefix("TULIP")
+
+	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
+		Level:      slog.LevelInfo,
+		TimeFormat: "2006-01-02 15:04:05",
+	}))
+	slog.SetDefault(logger)
+
+	if err := rootCmd.Execute(); err != nil {
+		slog.Error("Command failed", slog.Any("err", err))
 		os.Exit(1)
 	}
 }
 
-func watchEve(eve_file string) {
-	// Do the initial scan
-	slog.Info("Parsing initial eve contents...")
-	ratchet := updateEve(eve_file, 0)
+func runEnricher(cmd *cobra.Command, args []string) {
+	var (
+		mongodb     = viper.GetString("mongo")
+		tagFlowbits = viper.GetBool("flowbits")
+		redisConn   = viper.GetString("redis")
+	)
 
-	slog.Info("Monitoring eve file", slog.String("file", eve_file))
-	stat, err := os.Stat(eve_file)
-	prevSize := int64(0)
-	if err == nil {
-		prevSize = stat.Size()
+	if redisConn == "" {
+		slog.Warn("No redis connection supplied. Exiting.")
+		os.Exit(1)
 	}
 
-	for {
-		time.Sleep(time.Duration(*rescanPeriod) * time.Second)
-
-		new_stat, err := os.Stat(eve_file)
-		if err != nil {
-			slog.Error("Failed to open the eve file", slog.Any("err", err))
-			continue
-		}
-
-		if new_stat.Size() > prevSize {
-			slog.Info("Eve file was updated", slog.Int64("new_size", new_stat.Size()))
-			ratchet = updateEve(eve_file, ratchet)
-		}
-		prevSize = new_stat.Size()
-
-	}
-
-}
-
-// The eve file was just written to, let's parse some logs!
-func updateEve(eve_file string, ratchet int64) int64 {
-
-	// Open a handle to the eve file
-	eve_handle, err := os.Open(eve_file)
+	var err error
+	dbString := "mongodb://" + mongodb
+	slog.Info("Connecting to MongoDB", slog.String("uri", dbString))
+	gDb, err = db.ConnectMongo(dbString)
 	if err != nil {
-		slog.Error("Failed to open the eve file", slog.Any("err", err))
-		return ratchet
-	}
-	eve_handle.Seek(ratchet, 0)
-	eveReader := bufio.NewReader(eve_handle)
-	defer eve_handle.Close()
-
-	slog.Info("Start scanning eve file", slog.Int64("ratchet", ratchet))
-
-	// iterate over each line in the file
-	for {
-		line, err := eveReader.ReadString('\n')
-		if err != nil {
-			// This is most likely to be EOF, which is fine
-			// TODO; check the error code and log if it is something else
-			break
-		}
-		// Line parsing failed. Probably incomplete?
-		applied, err := handleEveLine(line)
-		if err == nil {
-			// parsing this line failed. It may be incomplete for a couple reasons.
-			// * First, we might have caught the file in the middle of a write.
-			//   That's fine, next pass we'll get new data
-			// * The second case is worse, this line may just be corrupt. In that case,
-			//   we need to skip over it, after verifying that we're not in case 1.
-
-			// For now, I'm just gonna solve this by ratchetting to the last successfully
-			// applied rule. This will cause us to rescan a few lines needlessly, but I'm okay with that.
-			if applied {
-				ratchet += int64(len(line))
-			}
-		}
+		slog.Error("Failed to connect to MongoDB", slog.Any("err", err))
+		os.Exit(1)
 	}
 
-	// Roll the eve handle back to the last successfully applied rule, so it can continue there
-	// next time this function is called.
-	return ratchet
+	watchRedis(redisConn, tagFlowbits)
 }
 
 /*
@@ -171,12 +122,11 @@ type suricataLog struct {
 	signature db.Signature
 }
 
-func handleEveLine(json string) (bool, error) {
+func handleEveLine(json string, tagFlowbits bool) (bool, error) {
 	if !gjson.Valid(json) {
 		return false, errors.New("Invalid json in eve line")
 	}
 
-	// TODO; error check this
 	src_port := gjson.Get(json, "src_port")
 	src_ip := gjson.Get(json, "src_ip")
 	dst_port := gjson.Get(json, "dest_port")
@@ -190,22 +140,16 @@ func handleEveLine(json string) (bool, error) {
 	jtag := gjson.Get(json, "alert.metadata.tag.0")
 	flowbits := gjson.Get(json, "metadata.flowbits")
 
-	// canonicalize the IP address notation to make sure it matches what the assembler entered
-	// into the database.
-	// TODO; just assuming these are all valid for now. Should be fine, since this is coming from
-	// suricata and is not _really_ user controlled. Might panic in some obscure case though.
 	src_ip_str := net.ParseIP(src_ip.String()).String()
 	dst_ip_str := net.ParseIP(dst_ip.String()).String()
 
-	// TODO; Double check this, might be broken for non-UTC?
 	start_time_obj, _ := time.Parse("2006-01-02T15:04:05.999999999-0700", start_time.String())
 
 	if jtag.Exists() {
 		tag = jtag.String()
 	}
 
-	// If no action was taken, there's no need for us to do anything with this line.
-	if !(sig_action.Exists() || (flowbits.Exists() && *tagFlowbits)) {
+	if !(sig_action.Exists() || (flowbits.Exists() && tagFlowbits)) {
 		return false, nil
 	}
 
@@ -227,42 +171,39 @@ func handleEveLine(json string) (bool, error) {
 
 	ret := false
 	if sig_action.Exists() {
-
 		sig := db.Signature{
 			ID:     int(sig_id.Int()),
 			Msg:    sig_msg.String(),
 			Action: sig_action.String(),
 			Tag:    tag,
 		}
-
-		// TODO; use one, sensible query instead of just trying both cases
 		ret = gDb.AddSignatureToFlow(id, sig, WINDOW)
 		ret = ret || gDb.AddSignatureToFlow(id_rev, sig, WINDOW)
 	}
 
-	if !(flowbits.Exists() && *tagFlowbits) {
+	if !(flowbits.Exists() && tagFlowbits) {
 		return ret, nil
 	}
 
 	tags := []string{}
 	flowbits.ForEach(func(key, value gjson.Result) bool {
 		tags = append(tags, value.String())
-		return true // keep iterating
+		return true
 	})
 
-	// TODO; use one, sensible query instead of just trying both cases
 	ret = gDb.AddTagsToFlow(id, tags, WINDOW)
 	ret = ret || gDb.AddTagsToFlow(id_rev, tags, WINDOW)
 	return ret, nil
 }
 
-func watchRedis(redisUrl string) {
+func watchRedis(redisUrl string, tagFlowbits bool) {
 	opt, err := redis.ParseURL(redisUrl)
 	if err != nil {
 		slog.Error("Failed to parse redis url", slog.Any("err", err))
 		return
 	}
 
+	slog.Info("Connecting to redis", slog.String("url", redisUrl))
 	rdb := redis.NewClient(opt)
 	defer func() {
 		err := rdb.Close()
@@ -273,7 +214,6 @@ func watchRedis(redisUrl string) {
 
 	slog.Info("Connected to redis")
 
-	// connect to "suricata" list and ingest the data
 	for {
 		lines, err := rdb.RPopCount(context.TODO(), "suricata", 100).Result()
 		if err != nil {
@@ -281,7 +221,6 @@ func watchRedis(redisUrl string) {
 				time.Sleep(1 * time.Second)
 				continue
 			}
-
 			slog.Warn("Failed to pop from redis", slog.Any("err", err))
 			time.Sleep(1 * time.Second)
 			continue
@@ -289,7 +228,7 @@ func watchRedis(redisUrl string) {
 
 		processed := 0
 		for _, line := range lines {
-			_, err = handleEveLine(line)
+			_, err = handleEveLine(line, tagFlowbits)
 			if err != nil {
 				slog.Error("Failed to handle eve line", slog.String("line", line), slog.Any("err", err))
 				continue

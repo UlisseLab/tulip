@@ -1,3 +1,9 @@
+// SPDX-FileCopyrightText: 2022 Rick de Jager <rickdejager99@gmail.com>
+// SPDX-FileCopyrightText: 2023 - 2024 gfelber <34159565+gfelber@users.noreply.github.com>
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0-only
+
 package assembler
 
 import (

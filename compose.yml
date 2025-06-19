@@ -1,3 +1,13 @@
+# SPDX-FileCopyrightText: 2019 Emiliano Ciavatta <emiliano.ciavatta@studio.unibo.it>
+# SPDX-FileCopyrightText: 2022 - 2024 Rick de Jager <rickdejager99@gmail.com>
+# SPDX-FileCopyrightText: 2022 moritz <moritsch@student.ethz.ch>
+# SPDX-FileCopyrightText: 2023 - 2024 gfelber <34159565+gfelber@users.noreply.github.com>
+# SPDX-FileCopyrightText: 2023 liskaant <liskaant@gmail.com>
+# SPDX-FileCopyrightText: 2023 meme-lord <meme-lord@users.noreply.github.com>
+# SPDX-FileCopyrightText: 2024 Eyad Issa <eyadlorenzo@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0-only
+
 services:
   frontend:
     build: frontend
@@ -84,7 +94,7 @@ services:
       - redis
     environment:
       TULIP_MONGO: mongo:27017
-      REDIS_URL: redis://redis:6379
+      TULIP_REDIS: redis://redis:6379
 
   mcp:
     build:

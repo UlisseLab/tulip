@@ -1,8 +1,12 @@
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -46,23 +50,25 @@ func main() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.SetEnvPrefix("TULIP")
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Command failed: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func runIngestor(cmd *cobra.Command, args []string) {
 	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
 		Level:      slog.LevelInfo,
 		TimeFormat: "2006-01-02 15:04:05",
 	}))
 	slog.SetDefault(logger)
 
-	cfgListenAddr := viper.GetString("listen")
-	cfgTempDir := viper.GetString("temp-dir")
-	cfgDestDir := viper.GetString("dest-dir")
-	cfgRotateInterval := viper.GetDuration("rotate-interval")
+	if err := rootCmd.Execute(); err != nil {
+		slog.Error("Command failed", slog.Any("err", err))
+		os.Exit(1)
+	}
+}
+
+func runIngestor(cmd *cobra.Command, args []string) {
+	var (
+		cfgListenAddr     = viper.GetString("listen")
+		cfgTempDir        = viper.GetString("temp-dir")
+		cfgDestDir        = viper.GetString("dest-dir")
+		cfgRotateInterval = viper.GetDuration("rotate-interval")
+	)
 
 	slog.Info("Starting ingestor service",
 		slog.String("listen", cfgListenAddr),

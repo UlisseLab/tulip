@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2022 Rick de Jager <rickdejager99@gmail.com>
+
+SPDX-License-Identifier: AGPL-3.0-only
+-->
+
 # Security Policy
 
 ## Supported Versions

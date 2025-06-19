@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
+#
+# SPDX-License-Identifier: CC0-1.0
+
+version = 1
+
+[[annotations]]
+path = "demo_images/*"
+
+SPDX-License-Identifier = "GPL-3.0-only"
+SPDX-FileCopyrightText = [
+    "2018 nicomazz_dell <nicolmazzucato@me.com>",
+    "2020 nicomazz <nicomazz97@gmail.com>",
+    "2022 Rick de Jager <rickdejager99@gmail.com>",
+]
+
+[[annotations]]
+path = "frontend/**"
+
+SPDX-License-Identifier = "GPL-3.0-only"
+SPDX-FileCopyrightText = [
+    "2022 Alexandre Iooss <erdnaxe@crans.org>",
+    "2022 Diederik Bakker <7628001+DiedB@users.noreply.github.com>",
+    "2022 moritz <moritsch@student.ethz.ch>",
+    "2022 - 2024 Rick de Jager <rickdejager99@gmail.com>",
+    "2022 MrPerux <perschrijver@gmail.com>",
+    "2023 - 2024 gfelber <34159565+gfelber@users.noreply.github.com>",
+    "2022 Qyn <qyn-ctf@gmail.com>",
+    "2023 - 2024 Sijisu <mail@sijisu.eu>",
+    "2023 Max Groot <19346100+MaxGroot@users.noreply.github.com>",
+    "2022 user <rickdejager99@gmail.com>",
+    "2024 Eyad Issa <eyadlorenzo@gmail.com>",
+]
