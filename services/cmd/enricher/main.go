@@ -24,7 +24,7 @@ var (
 	redisConn    = flag.String("redis", "", "Redis connection string")
 )
 
-var gDb db.Database
+var gDb db.MongoDatabase
 
 const WINDOW = 5000 // ms
 

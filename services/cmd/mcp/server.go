@@ -56,7 +56,7 @@ func main() {
 	}
 }
 
-func addTools(mcpServ *server.MCPServer, database *db.Database) {
+func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 	// Add tools to the MCP server
 	mcpServ.AddTool(
 		mcp.NewTool(

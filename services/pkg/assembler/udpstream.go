@@ -43,13 +43,12 @@ func (stream *UdpStream) ProcessSegment(flow gopacket.Flow, udp *layers.UDP, cap
 
 	// We have to make sure to stay under the document limit
 	available := uint(streamdoc_limit) - stream.PacketSize
+
 	length := uint(len(udp.Payload))
-	if length > available {
-		length = available
-	}
-	if length < 0 {
-		length = 0
-	}
+
+	// clamp length to [0, available]
+	length = min(length, available)
+	length = max(length, 0)
 
 	stream.Items = append(stream.Items, db.FlowItem{
 		From: from,

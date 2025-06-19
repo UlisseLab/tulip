@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var gDB db.Database
+var gDB db.MongoDatabase
 
 var rootCmd = &cobra.Command{
 	Use:   "assembler",

@@ -30,7 +30,7 @@ type Service struct {
 }
 
 type Config struct {
-	DB            *db.Database   // the database to use for storing flows
+	DB            db.Database   // the database to use for storing flows
 	BpfFilter     string         // BPF filter to apply to the pcap handle
 	FlushInterval time.Duration  // Interval to flush non-terminated connections
 	FlagRegex     *regexp.Regexp // Regex to apply for flagging flows
@@ -326,10 +326,8 @@ func (s Service) HandlePcapStream(r io.Reader, fname string) {
 }
 
 func (s Service) HandlePcapUri(fname string) {
-	var handle *pcap.Handle
-	var err error
-
-	if handle, err = pcap.OpenOffline(fname); err != nil {
+	handle, err := pcap.OpenOffline(fname)
+	if err != nil {
 		slog.Error("PCAP OpenOffline error", "err", err)
 		return
 	}

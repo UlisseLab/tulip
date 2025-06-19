@@ -18,7 +18,7 @@ import (
 
 // API holds dependencies for handlers
 type API struct {
-	DB     db.Database
+	DB     db.MongoDatabase
 	Config *Config
 }
 
