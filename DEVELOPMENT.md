@@ -14,28 +14,33 @@
 
 ```mermaid
 flowchart LR
-    PCAP>PCAP]
-    EJSON>eve.json]
-
-    ASS[assembler]
+    TCP1(tcpdump)
+    KERYX(Keryx)
+    subgraph pcap
+        direction RL
+        PCAP1>PCAP1]
+        PCAP2>PCAP2]
+        PCAP3>PCAP3]
+    end
+    subgraph analysis
+        ASS[assembler]
+        SUR[Suricata]
+    end
+    ING[ingestor]
     ENR[enricher]
-    FLA[flagids]
-    SUR[Suricata]
     DB[(mongodb)]
-
+    REDIS[(redis)]
     API[REST API]
     MCP[MCP Server]
     FRO[Frontend]
-
-    PCAP --> ASS
-    PCAP --> SUR
-
-    SUR --> EJSON --> ENR
-
-    FLA --> DB
+    TCP1  --> ING
+    KERYX --> ING
+    ING --> pcap
+    pcap --> ASS
+    pcap --> SUR
+    SUR --> REDIS --> ENR
     ENR --> DB
     ASS --> DB
-
     DB --> API --> FRO
     DB --> MCP
 ```
