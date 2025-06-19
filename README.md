@@ -45,23 +45,28 @@ docker compose up -d --build
 
 ### Ingesting traffic
 
-#### Method 1: Using the ingestor
+#### TLDR
 
-To ingest traffic, it is recommended to create a shared bind mount with the docker-compose. One convenient way to set this up is as follows:
+```
+sudo tcpdump -n --immediate-mode -s 65535 -U -w - | nc localhost 9999
+# or
+dumpcap -i eth0 -w - -F pcap  | nc localhost 9999
+```
 
-1. On the vulnbox, start a rotating packet sniffer (e.g. tcpdump, suricata, ...)
-1. Using rsync, copy complete captures to the machine running tulip (e.g. to /traffic)
-1. Add a bind to the assembler service so it can read /traffic
 
-The ingestor will use inotify to watch for new pcap's and suricata logs. No need to set a chron job.
+#### Long explanation
 
-#### Method 2: Using PCAP-over-IP
+The `ingestor` service is responsible for reading traffic from a pcap file or live interface and writing it to the shared volume.
 
-If you have a lot of traffic (or you want to see traffic in real-time), you might want to use PCAP-over-IP. This allows you to stream traffic directly to Tulip. To do this, you have to:
+You can configure the
 
-1. Start the `pcap-over-ip` service on a machine. You could use [pcap-broker](https://github.com/UlisseLab/pcap-broker) for this.
-2. Set the `PCAP_OVER_IP` variable in the `.env` file to the IP of the vulnbox.
-3. Start the stack with `docker-compose up -d --build`.
+- listen interface
+- rotation interval
+  in the `.env` file.
+
+The higher the rotation interval, the more delay there will be before the traffic is visible in Tulip. The default is 30 sec, which should be sufficient for most CTFs.
+
+> [!WARNING] The assembler only maintains flow for a single PCAP file, so setting the rotation interval too low could result in the assembler not being able to link packets together in a flow.
 
 ## Suricata synchronization
 

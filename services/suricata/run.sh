@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 SURICATA_PARAMS="-c /etc/suricata/suricata.yaml \
-  -r /dev/stdin
+  -r ${WATCH_DIR}
   --pcap-file-continuous \
   --set runmode=single \
   --set outputs.0.fast.enabled=false \

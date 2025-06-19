@@ -1,16 +1,12 @@
 package main
 
 import (
-	"fmt"
+	"path/filepath"
 	"regexp"
+	"strings"
 
-	"context"
 	"log/slog"
-	"net"
 	"os"
-	"os/signal"
-	"sync/atomic"
-	"syscall"
 	"time"
 
 	"tulip/pkg/assembler"
@@ -26,14 +22,13 @@ var gDB db.Database
 var rootCmd = &cobra.Command{
 	Use:   "assembler",
 	Short: "PCAP assembler TCP ingest service",
-	Long: `A network traffic assembler that listens for incoming TCP connections.
-Each connection is interpreted as a PCAP stream and ingested into MongoDB.`,
-	Run: runAssembler,
+	Long:  `Assembler watches a directory for incoming PCAP files, processes them, and assembles TCP streams.`,
+	Run:   runAssembler,
 }
 
 func init() {
 	rootCmd.Flags().String("mongo", "localhost:27017", "MongoDB DNS name + port (e.g. mongo:27017)")
-	rootCmd.Flags().String("listen", "localhost:9999", "TCP address to listen on for incoming PCAP streams (e.g. :1337, 127.0.0.1:9000)")
+	rootCmd.Flags().String("watch-dir", "/tmp/ingestor_ready", "Directory to watch for incoming PCAP files")
 	rootCmd.Flags().String("flag", "", "Flag regex, used for flag in/out tagging")
 	rootCmd.Flags().String("flush-interval", "15s", "Interval for flushing connections (e.g. 15s, 1m)")
 	rootCmd.Flags().Bool("tcp-lazy", false, "Enable lazy decoding for TCP packets")
@@ -42,7 +37,7 @@ func init() {
 	rootCmd.Flags().String("connection-timeout", "30s", "Connection timeout for both TCP and UDP flows (e.g. 30s, 1m)")
 
 	viper.BindPFlag("mongo", rootCmd.Flags().Lookup("mongo"))
-	viper.BindPFlag("listen", rootCmd.Flags().Lookup("listen"))
+	viper.BindPFlag("watch-dir", rootCmd.Flags().Lookup("watch-dir"))
 	viper.BindPFlag("flag", rootCmd.Flags().Lookup("flag"))
 	viper.BindPFlag("flush-interval", rootCmd.Flags().Lookup("flush-interval"))
 	viper.BindPFlag("tcp-lazy", rootCmd.Flags().Lookup("tcp-lazy"))
@@ -51,32 +46,32 @@ func init() {
 	viper.BindPFlag("connection-timeout", rootCmd.Flags().Lookup("connection-timeout"))
 
 	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.SetEnvPrefix("TULIP")
 }
 
 func runAssembler(cmd *cobra.Command, args []string) {
-	// Get all viper flags
-	var (
-		mongodb              = viper.GetString("mongo")
-		listenAddr           = viper.GetString("listen")
-		flagRegexStr         = viper.GetString("flag")
-		flushIntervalStr     = viper.GetString("flush-interval")
-		tcpLazy              = viper.GetBool("tcp-lazy")
-		experimental         = viper.GetBool("experimental")
-		nonstrict            = viper.GetBool("nonstrict")
-		connectionTimeoutStr = viper.GetString("connection-timeout")
-	)
-
 	// Setup logging
 	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
 		Level:      slog.LevelInfo,
-		TimeFormat: time.TimeOnly,
+		TimeFormat: "2006-01-02 15:04:05",
 	}))
 	slog.SetDefault(logger)
+
+	// Get config from viper
+	mongodb := viper.GetString("mongo")
+	watchDir := viper.GetString("watch-dir")
+	flagRegexStr := viper.GetString("flag")
+	flushIntervalStr := viper.GetString("flush-interval")
+	tcpLazy := viper.GetBool("tcp-lazy")
+	experimental := viper.GetBool("experimental")
+	nonstrict := viper.GetBool("nonstrict")
+	connectionTimeoutStr := viper.GetString("connection-timeout")
 
 	// Connect to MongoDB
 	dbString := "mongodb://" + mongodb
 	slog.Info("Connecting to MongoDB...", slog.String("uri", dbString))
+
 	gDB = db.ConnectMongo(dbString)
 	slog.Info("Connected to MongoDB")
 
@@ -129,71 +124,39 @@ func runAssembler(cmd *cobra.Command, args []string) {
 	}
 	service := assembler.NewAssemblerService(config)
 
-	// Start TCP server
-	slog.Info("Starting TCP server", slog.String("address", listenAddr))
-	ln, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		slog.Error("Failed to start TCP server", slog.Any("err", err))
-		os.Exit(1)
-	}
-	defer ln.Close()
+	// Watch directory for new PCAP files and ingest them
+	slog.Info("Watching directory for new PCAP files", slog.String("dir", watchDir))
 
-	// Handle graceful shutdown via context
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-signalChan
-		slog.Warn("Received shutdown signal, stopping server...")
-		cancel()
-		ln.Close()
-	}()
+	// Use polling for simplicity and reliability
+	pollInterval := 2 * time.Second
+	seen := make(map[string]struct{})
 
-	var connID int64 = 0
 	for {
-		conn, err := ln.Accept()
+		files, err := os.ReadDir(watchDir)
 		if err != nil {
-			select {
-			case <-ctx.Done():
-				break
-			default:
-				slog.Error("Failed to accept connection", slog.Any("err", err))
+			slog.Error("Failed to read watch directory", slog.Any("err", err))
+			time.Sleep(pollInterval)
+			continue
+		}
+		for _, file := range files {
+			if file.IsDir() {
 				continue
 			}
-			break
-		}
-		id := atomic.AddInt64(&connID, 1)
-		go handlePcapConnectionCtx(ctx, service, conn, id)
-	}
-
-	slog.Info("Server stopped")
-}
-
-func handlePcapConnectionCtx(ctx context.Context, service *assembler.Service, conn net.Conn, id int64) {
-	defer conn.Close()
-	clientAddr := conn.RemoteAddr().String()
-	fname := fmt.Sprintf("tcpclient-%s-%d-%d", clientAddr, id, time.Now().Unix())
-	slog.Info("Accepted new PCAP connection", slog.String("client", clientAddr), slog.String("fname", fname))
-
-	done := make(chan struct{})
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("Recovered from panic in PCAP handler", slog.Any("err", r), slog.String("client", clientAddr), slog.String("fname", fname))
+			name := file.Name()
+			if filepath.Ext(name) != ".pcap" {
+				continue
 			}
-			close(done)
-		}()
-		// Ingest the stream using HandlePcapStream
-		service.HandlePcapStream(conn, fname)
-	}()
-
-	select {
-	case <-ctx.Done():
-		slog.Warn("Context canceled, closing connection", slog.String("client", clientAddr), slog.String("fname", fname))
-		conn.Close()
-	case <-done:
-		slog.Info("Finished ingesting PCAP connection", slog.String("client", clientAddr), slog.String("fname", fname))
+			fullPath := filepath.Join(watchDir, name)
+			if _, ok := seen[fullPath]; ok {
+				continue
+			}
+			seen[fullPath] = struct{}{}
+			go func(path string) {
+				slog.Info("Ingesting new PCAP file", slog.String("file", path))
+				service.HandlePcapUri(path)
+			}(fullPath)
+		}
+		time.Sleep(pollInterval)
 	}
 }
 

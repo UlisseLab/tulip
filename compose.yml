@@ -23,11 +23,11 @@ services:
       - mongo
 
     volumes:
-      - ${TRAFFIC_DIR_HOST}:${TRAFFIC_DIR_DOCKER}:ro
+      - ${TRAFFIC_DIR}:/traffic:ro
 
     environment:
-      TULIP_MONGO: ${TULIP_MONGO}
-      TULIP_TRAFFIC_DIR: ${TRAFFIC_DIR_DOCKER}
+      TULIP_MONGO: mongo:27017
+      TULIP_TRAFFIC_DIR: /traffic
       FLAG_REGEX: ${FLAG_REGEX}
       TICK_START: ${TICK_START}
       TICK_LENGTH: ${TICK_LENGTH}
@@ -39,19 +39,15 @@ services:
       context: services/
       target: assembler
 
-    ports:
-      - "9999:9999"
+    volumes:
+      - ${TRAFFIC_DIR}:/traffic:ro
 
     restart: unless-stopped
-
     depends_on:
       - mongo
 
     environment:
-      TULIP_LISTEN: ":9999"
-      TULIP_MONGO: ${TULIP_MONGO}
-      TULIP_FLAG: ${FLAG_REGEX}
-
+      TULIP_WATCH_DIR: /traffic
       TULIP_FLUSH_INTERVAL: "30s"
       TULIP_CONNECTION_TIMEOUT: "1m"
 
@@ -59,8 +55,24 @@ services:
       TULIP_EXPERIMENTAL: "true"
       TULIP_NONSTRICT: "true"
 
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      TULIP_MONGO: mongo:27017
+      TULIP_FLAG: ${FLAG_REGEX}
+
+  ingestor:
+    build:
+      context: services/
+      target: ingestor
+    restart: unless-stopped
+
+    ports:
+      - "${INGESTOR_ADDR}:9999"
+    volumes:
+      - ${TRAFFIC_DIR}:/traffic
+
+    environment:
+      TULIP_DEST_DIR: /traffic
+
+      TULIP_ROTATE_INTERVAL: "${INGESTOR_ROTATE}"
 
   enricher:
     build:
@@ -71,7 +83,7 @@ services:
       - mongo
       - redis
     environment:
-      TULIP_MONGO: ${TULIP_MONGO}
+      TULIP_MONGO: mongo:27017
       REDIS_URL: redis://redis:6379
 
   mcp:
@@ -84,7 +96,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      MONGO_HOST: ${TULIP_MONGO}
+      MONGO_HOST: mongo:27017
 
   suricata:
     build: services/suricata
@@ -93,12 +105,12 @@ services:
     restart: unless-stopped
     volumes:
       - ./suricata.rules:/var/lib/suricata/rules/suricata.rules:ro
+      - ${TRAFFIC_DIR}:/traffic:ro
     environment:
-      PCAP_OVER_IP: ${PCAP_OVER_IP}
+      WATCH_DIR: /traffic
       REDIS_HOST: redis
       REDIS_PORT: 6379
-    extra_hosts:
-      - "host.docker.internal:host-gateway" # for PCAP-over-ip
+
     tty: true
 
   redis:

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -83,16 +84,16 @@ func (db Database) GetFlowList(filters bson.M) ([]FlowEntry, error) {
 
 // GetTagList returns all tag names (_id) from the tags collection
 func (db Database) GetTagList() ([]string, error) {
-	collection := db.client.Database("pcap").Collection("tags")
+	tagsCollection := db.client.Database("pcap").Collection("tags")
 
-	cur, err := collection.Find(context.TODO(), bson.M{})
+	cur, err := tagsCollection.Find(context.TODO(), bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to find tags: %v", err)
 	}
 
 	defer cur.Close(context.TODO())
 
-	var tags []string
+	tags := make([]string, 0)
 	for cur.Next(context.TODO()) {
 		var tag struct {
 			ID string `bson:"_id"`
@@ -101,6 +102,42 @@ func (db Database) GetTagList() ([]string, error) {
 			tags = append(tags, tag.ID)
 		}
 	}
+
+	pipeline := mongo.Pipeline{
+		{{Key: "$unwind", Value: "$tags"}},
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "uniqueTags", Value: bson.D{{Key: "$addToSet", Value: "$tags"}}},
+		}}},
+		{{Key: "$project", Value: bson.D{
+			{Key: "_id", Value: 0},
+			{Key: "uniqueTags", Value: 1},
+		}}},
+	}
+
+	flowCollection := db.client.Database("pcap").Collection("pcap")
+	cur2, err := flowCollection.Aggregate(context.TODO(), pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate tags: %v", err)
+	}
+	defer cur2.Close(context.TODO())
+
+	var aggResult []struct {
+		UniqueTags []string `bson:"uniqueTags"`
+	}
+	if err := cur2.All(context.TODO(), &aggResult); err != nil {
+		return nil, fmt.Errorf("failed to decode aggregation result: %v", err)
+	}
+
+	// Add unique tags from aggregation result
+	if len(aggResult) != 0 {
+		for _, tag := range aggResult[0].UniqueTags {
+			if !slices.Contains(tags, tag) {
+				tags = append(tags, tag)
+			}
+		}
+	}
+
 	return tags, nil
 }
 

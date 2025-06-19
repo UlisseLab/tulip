@@ -79,7 +79,7 @@ func (s *Service) ParseHttpFlow(flow *db.FlowEntry) {
 
 			// Substitute body
 			encodingHeader := res.Header["Content-Encoding"]
-			if encodingHeader == nil || len(encodingHeader) == 0 {
+			if len(encodingHeader) == 0 {
 				// If we don't find an encoding header, it is either not valid,
 				// or already in plain text. In any case, we don't have to edit anything.
 				continue
@@ -91,14 +91,11 @@ func (s *Service) ParseHttpFlow(flow *db.FlowEntry) {
 			switch encoding {
 			case "gzip":
 				newReader, err = handleGzip(res.Body)
-				break
 			case "br":
 				newReader, err = handleBrotili(res.Body)
-				break
 			case "deflate":
 				//TODO; verify this is correct
 				newReader, err = handleGzip(res.Body)
-				break
 			default:
 				// Skipped, unknown or identity encoding
 				continue

@@ -17,7 +17,8 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     && go build -v -o enricher ./cmd/enricher \
     && go build -v -o assembler ./cmd/assembler \
     && go build -v -o api ./cmd/api \
-    && go build -v -o mcp ./cmd/mcp
+    && go build -v -o mcp ./cmd/mcp \
+    && go build -v -o ingestor ./cmd/ingestor
 
 ### BASE IMAGE
 FROM alpine:${ALPINE_VERSION} AS base
@@ -27,7 +28,7 @@ FROM base AS enricher
 
 WORKDIR /app
 COPY --from=builder /build/enricher ./
-CMD ["./enricher"]
+ENTRYPOINT ["./enricher"]
 
 ### ASSEMBLER
 FROM base AS assembler
@@ -35,7 +36,7 @@ RUN apk add --no-cache libpcap-dev
 
 WORKDIR /app
 COPY --from=builder /build/assembler ./
-CMD ["./assembler"]
+ENTRYPOINT ["./assembler"]
 
 ### API
 FROM base AS api
@@ -43,7 +44,7 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 COPY --from=builder /build/api ./
-CMD ["./api"]
+ENTRYPOINT ["./api"]
 
 ### MCP
 FROM base AS mcp
@@ -51,4 +52,8 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 COPY --from=builder /build/mcp ./
-CMD ["./mcp"]
+ENTRYPOINT ["./mcp"]
+
+FROM base AS ingestor
+COPY --from=builder /build/ingestor /app/ingestor
+ENTRYPOINT ["/app/ingestor"]

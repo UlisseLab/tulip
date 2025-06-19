@@ -1,8 +1,12 @@
 :3000 {
+    root * /app/public
+
     handle_path /api/* {
         reverse_proxy api:5000
     }
 
-    root * /app/public
-    file_server
+    handle {
+        try_files {path} /index.html
+        file_server
+    }
 }

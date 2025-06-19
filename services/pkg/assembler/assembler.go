@@ -2,13 +2,13 @@ package assembler
 
 import (
 	"bufio"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"regexp"
 	"time"
 	"tulip/pkg/db"
-	"io"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/ip4defrag"
