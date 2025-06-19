@@ -15,11 +15,9 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
-
     depends_on:
       - mongo
       - api
-
     environment:
       API_SERVER_ENDPOINT: http://api:5000/
 
@@ -28,13 +26,10 @@ services:
       context: services/
       target: api
     restart: unless-stopped
-
     depends_on:
       - mongo
-
     volumes:
       - ${TRAFFIC_DIR}:/traffic:ro
-
     environment:
       TULIP_MONGO: mongo:27017
       TULIP_TRAFFIC_DIR: /traffic
@@ -48,40 +43,32 @@ services:
     build:
       context: services/
       target: assembler
-
     volumes:
       - ${TRAFFIC_DIR}:/traffic:ro
-
     restart: unless-stopped
     depends_on:
       - mongo
-
     environment:
       TULIP_WATCH_DIR: /traffic
-      TULIP_FLUSH_INTERVAL: "30s"
-      TULIP_CONNECTION_TIMEOUT: "1m"
-
-      TULIP_TCP_LAZY: "true"
-      TULIP_EXPERIMENTAL: "true"
-      TULIP_NONSTRICT: "true"
-
       TULIP_MONGO: mongo:27017
       TULIP_FLAG: ${FLAG_REGEX}
+      TULIP_FLUSH_INTERVAL: ${ASSEMBLER_FLUSH_INTERVAL}
+      TULIP_CONNECTION_TIMEOUT: ${ASSEMBLER_CONNECTION_TIMEOUT}
+      TULIP_TCP_LAZY: ${ASSEMBLER_TCP_LAZY}
+      TULIP_EXPERIMENTAL: ${ASSEMBLER_EXPERIMENTAL}
+      TULIP_NONSTRICT: ${ASSEMBLER_NONSTRICT}
 
   ingestor:
     build:
       context: services/
       target: ingestor
     restart: unless-stopped
-
     ports:
       - "${INGESTOR_ADDR}:9999"
     volumes:
       - ${TRAFFIC_DIR}:/traffic
-
     environment:
       TULIP_DEST_DIR: /traffic
-
       TULIP_ROTATE_INTERVAL: "${INGESTOR_ROTATE}"
 
   enricher:
