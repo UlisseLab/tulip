@@ -14,19 +14,19 @@ import (
 
 // Service represents a single service with a name and port.
 type Service struct {
-	Name string
-	Port int
+	Name string `json:"name"`
+	Port int    `json:"port"`
 }
 
 // Config holds all configuration values for the application.
 type Config struct {
-	TickLength  int
-	StartDate   string
-	MongoHost   string
-	FlagRegex   string
-	TrafficDir  string
-	VMIP        string
-	Services    []Service
+	TickLength int
+	StartDate  string
+	MongoHost  string
+	FlagRegex  string
+	TrafficDir string
+	VMIP       string
+	Services   []Service
 }
 
 // ParseServices parses a space-separated list of service:port pairs.

@@ -68,7 +68,6 @@ sudo tcpdump -n --immediate-mode -s 65535 -U -w - | nc localhost 9999
 dumpcap -i eth0 -w - -F pcap  | nc localhost 9999
 ```
 
-
 #### Long explanation
 
 The `ingestor` service is responsible for reading traffic from a pcap file or live interface and writing it to the shared volume.

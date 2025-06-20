@@ -196,7 +196,24 @@ func (api *API) setStar(c echo.Context) error {
 }
 
 func (api *API) getServices(c echo.Context) error {
-	return c.JSON(http.StatusOK, api.Config.Services)
+
+	type apiService struct {
+		Name string `json:"name"`
+		Port int    `json:"port"`
+		Ip   string `json:"ip"`
+	}
+
+	// Convert Config.Services to apiService format
+	services := make([]apiService, len(api.Config.Services))
+	for i, svc := range api.Config.Services {
+		services[i] = apiService{
+			Name: svc.Name,
+			Port: svc.Port,
+			Ip:   api.Config.VMIP,
+		}
+	}
+
+	return c.JSON(http.StatusOK, services)
 }
 
 func (api *API) getFlagRegex(c echo.Context) error {
