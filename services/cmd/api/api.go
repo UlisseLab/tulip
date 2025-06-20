@@ -23,14 +23,14 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-// API holds dependencies for handlers
-type API struct {
+// Router holds dependencies for handlers
+type Router struct {
 	DB     db.MongoDatabase
 	Config *Config
 }
 
 // RegisterRoutes registers all API endpoints to the Echo router
-func (api *API) RegisterRoutes(e *echo.Echo) {
+func (api *Router) RegisterRoutes(e *echo.Echo) {
 	e.GET("/", api.helloWorld)
 	e.GET("/tick_info", api.getTickInfo)
 	e.GET("/tags", api.getTags)
@@ -47,20 +47,27 @@ func (api *API) RegisterRoutes(e *echo.Echo) {
 	e.POST("/to_single_python_request", api.convertToSinglePythonRequest)
 }
 
+type apiError struct {
+	Error string `json:"error"`
+}
+
 // --- Handlers ---
 
-func (api *API) helloWorld(c echo.Context) error {
+func (api *Router) helloWorld(c echo.Context) error {
 	return c.String(http.StatusOK, "Hello, World!")
 }
 
-func (api *API) getTickInfo(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]any{
-		"startDate":  api.Config.StartDate,
-		"tickLength": api.Config.TickLength,
-	})
+func (api *Router) getTickInfo(c echo.Context) error {
+	type tickInfo struct {
+		StartDate  string `json:"startDate"`  // Start date of the tick
+		TickLength int    `json:"tickLength"` // Length of each tick in seconds
+	}
+
+	info := tickInfo{StartDate: api.Config.StartDate, TickLength: api.Config.TickLength}
+	return c.JSON(http.StatusOK, info)
 }
 
-func (api *API) query(c echo.Context) error {
+func (api *Router) query(c echo.Context) error {
 
 	// TODO: this is horrible, the API layer should not be aware of the database structure
 
@@ -79,8 +86,7 @@ func (api *API) query(c echo.Context) error {
 
 	var req flowQueryRequest
 	if err := c.Bind(&req); err != nil {
-		slog.Error("Failed to bind request", "error", err, "url", c.Request().URL.String())
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
+		return c.JSON(http.StatusBadRequest, apiError{Error: "Invalid request format"})
 	}
 
 	filter := bson.D{}
@@ -202,7 +208,9 @@ func (api *API) query(c echo.Context) error {
 		for _, sigID := range flow.Suricata {
 			sig, err := api.DB.GetSignature(sigID)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				slog.Error("Failed to fetch signature", slog.String("id", sigID), slog.Any("err", err))
+				return c.JSON(http.StatusInternalServerError,
+					apiError{"Could not fetch signature. See server logs for details."})
 			}
 			res.Signatures = append(res.Signatures, sig)
 		}
@@ -213,35 +221,38 @@ func (api *API) query(c echo.Context) error {
 	return c.JSON(http.StatusOK, apiResults)
 }
 
-func (api *API) getTags(c echo.Context) error {
+func (api *Router) getTags(c echo.Context) error {
 	tags, err := api.DB.GetTagList()
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to fetch tags", slog.Any("err", err))
+		return c.JSON(http.StatusInternalServerError, apiError{"Could not fetch tags. See server logs for details."})
 	}
 	return c.JSON(http.StatusOK, tags)
 }
 
-func (api *API) getSignature(c echo.Context) error {
+func (api *Router) getSignature(c echo.Context) error {
 	id := c.Param("id")
 	sig, err := api.DB.GetSignature(id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to fetch signature", slog.String("id", id), slog.Any("err", err))
+		return c.JSON(http.StatusInternalServerError, apiError{"Could not fetch signature. See server logs for details."})
 	}
 	return c.JSON(http.StatusOK, sig)
 }
 
-func (api *API) setStar(c echo.Context) error {
+func (api *Router) setStar(c echo.Context) error {
 	flowID := c.Param("flow_id")
 	starToSet := c.Param("star_to_set")
 	star := starToSet != "0"
 	err := api.DB.SetStar(flowID, star)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to set star", slog.String("flow_id", flowID), slog.Any("err", err))
+		return c.JSON(http.StatusInternalServerError, apiError{"Could not set star. See server logs for details."})
 	}
 	return c.String(http.StatusOK, "ok!")
 }
 
-func (api *API) getServices(c echo.Context) error {
+func (api *Router) getServices(c echo.Context) error {
 
 	type apiService struct {
 		Name string `json:"name"`
@@ -252,34 +263,33 @@ func (api *API) getServices(c echo.Context) error {
 	// Convert Config.Services to apiService format
 	services := make([]apiService, len(api.Config.Services))
 	for i, svc := range api.Config.Services {
-		services[i] = apiService{
-			Name: svc.Name,
-			Port: svc.Port,
-			Ip:   api.Config.VMIP,
-		}
+		services[i] = apiService{Name: svc.Name, Port: svc.Port, Ip: api.Config.VMIP}
 	}
 
 	return c.JSON(http.StatusOK, services)
 }
 
-func (api *API) getFlagRegex(c echo.Context) error {
+func (api *Router) getFlagRegex(c echo.Context) error {
 	return c.JSON(http.StatusOK, api.Config.FlagRegex)
 }
 
-func (api *API) getFlowDetail(c echo.Context) error {
+func (api *Router) getFlowDetail(c echo.Context) error {
 	id := c.Param("id")
+
 	flow, err := api.DB.GetFlowDetail(id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to fetch flow detail", slog.String("id", id), slog.Any("err", err))
+		return c.JSON(http.StatusInternalServerError, apiError{"Could not fetch flow detail. See server logs for details."})
 	}
+
 	return c.JSON(http.StatusOK, flow)
 }
 
-func (api *API) convertToSinglePythonRequest(c echo.Context) error {
+func (api *Router) convertToSinglePythonRequest(c echo.Context) error {
 	type Request struct {
+		Id         string `query:"id"`
 		Tokenize   bool   `query:"tokenize"`
 		UseSession bool   `query:"use_requests_session,omitempty"`
-		Id         string `query:"id"`
 	}
 
 	var (
@@ -328,65 +338,66 @@ func (api *API) convertToSinglePythonRequest(c echo.Context) error {
 	return c.String(http.StatusOK, py)
 }
 
-func (api *API) convertToPythonRequests(c echo.Context) error {
+func (api *Router) convertToPythonRequests(c echo.Context) error {
 	id := c.Param("id")
 	tokenize, _ := strconv.ParseBool(c.QueryParam("tokenize"))
 	useSession, _ := strconv.ParseBool(c.QueryParam("use_requests_session"))
 
 	flow, err := api.DB.GetFlowDetail(id)
 	if err != nil || flow == nil {
-		return c.String(http.StatusBadRequest, "There was an error while converting the request:\nInvalid flow: Invalid flow id")
+		return c.String(http.StatusBadRequest, "Invalid flow: Invalid flow id")
 	}
 
 	py, err := convertFlowToHTTPRequests(flow, tokenize, useSession)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, fmt.Sprintf("There was an error while converting the request:\n%s: %s", err.Error(), err))
+		slog.Error("Failed to convert flow to Python requests", slog.String("id", id), slog.Any("err", err))
+		return c.JSON(http.StatusInternalServerError, apiError{"Could not convert flow to Python requests. See server logs for details."})
 	}
 	return c.String(http.StatusOK, py)
 }
 
-func (api *API) convertToPwn(c echo.Context) error {
+func (api *Router) convertToPwn(c echo.Context) error {
 	id := c.Param("id")
 	flow, err := api.DB.GetFlowDetail(id)
 	if err != nil || flow == nil {
-		return c.String(http.StatusBadRequest, "There was an error while converting the request:\nInvalid flow: Invalid flow id")
+		return c.String(http.StatusBadRequest, "Invalid flow: Invalid flow id")
 	}
 	script := flowToPwn(flow)
 	return c.String(http.StatusOK, script)
 }
 
-func (api *API) downloadFile(c echo.Context) error {
+func (api *Router) downloadFile(c echo.Context) error {
 	fileParam := c.QueryParam("file")
 	if fileParam == "" {
-		return c.String(http.StatusBadRequest, "There was an error while downloading the requested file:\nInvalid 'file': No 'file' given")
+		return c.String(http.StatusBadRequest, "Invalid 'file': No 'file' given")
 	}
 
+	// Resolve the absolute path of the requested file
 	absPath, err := filepath.Abs(fileParam)
 	if err != nil {
-		return c.String(http.StatusBadRequest, "There was an error while downloading the requested file:\nInvalid 'file': Could not resolve path")
+		return c.String(http.StatusBadRequest, "Invalid 'file': Could not resolve path")
 	}
 
+	//
 	trafficDir := api.Config.TrafficDir
 	trafficDirAbs, err := filepath.Abs(trafficDir)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, "Internal error: could not resolve traffic_dir")
+		return c.String(http.StatusInternalServerError,
+			"Internal error: could not resolve traffic_dir. Contact the administrator.")
 	}
 
 	// Ensure requested file is within trafficDir
 	if !isSubPath(absPath, trafficDirAbs) {
-		return c.String(http.StatusBadRequest, "There was an error while downloading the requested file:\nInvalid 'file': 'file' was not in a subdirectory of traffic_dir")
+		return c.String(http.StatusBadRequest, "Invalid 'file': 'file' was not in a subdirectory of traffic_dir")
 	}
 
-	f, err := os.Open(absPath)
+	// Check if the file exists
+	_, err = os.Stat(absPath)
 	if err != nil {
-		return c.String(http.StatusNotFound, "There was an error while downloading the requested file:\nInvalid 'file': 'file' not found")
+		return c.String(http.StatusNotFound, "Invalid 'file': 'file' not found")
 	}
-	defer f.Close()
 
-	c.Response().Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(absPath))
-	c.Response().Header().Set("Content-Type", "application/octet-stream")
-	_, _ = io.Copy(c.Response().Writer, f)
-	return nil
+	return c.File(absPath) // This will write the file to the response
 }
 
 // --- Helpers ---

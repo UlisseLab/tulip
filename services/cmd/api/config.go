@@ -36,21 +36,25 @@ func ParseServices(s string) ([]Service, error) {
 	if s == "" {
 		return services, nil
 	}
-	parts := strings.Fields(s)
-	for _, part := range parts {
+
+	parts := strings.FieldsSeq(s)
+	for part := range parts {
 		split := strings.Split(part, ":")
 		if len(split) != 2 {
 			return nil, fmt.Errorf("invalid service definition: %s", part)
 		}
+
+		name := split[0]
 		port, err := strconv.Atoi(split[1])
 		if err != nil {
 			return nil, fmt.Errorf("invalid port for service %s: %v", part, err)
+		} else if port <= 0 || port > 65535 {
+			return nil, fmt.Errorf("port out of range for service %s: %d", part, port)
 		}
-		services = append(services, Service{
-			Name: split[0],
-			Port: port,
-		})
+
+		services = append(services, Service{Name: name, Port: port})
 	}
+
 	return services, nil
 }
 

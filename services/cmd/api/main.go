@@ -58,14 +58,15 @@ func main() {
 	e.Use(middleware.CORS())    // Enable CORS for all origins
 	e.Use(middleware.Gzip())    // Enable Gzip compression for responses
 
-	// Register all API endpoints using the API struct from api.go
-	api := &API{DB: mdb, Config: cfg}
-	api.RegisterRoutes(e)
+	// Register all API endpoints using the API struct from router.go
+	router := &Router{DB: mdb, Config: cfg}
+	router.RegisterRoutes(e)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "5000"
 	}
+
 	slog.Info("Starting server", "port", port)
 	if err := e.Start(":" + port); err != nil {
 		slog.Error("Echo server failed", slog.Any("err", err))
