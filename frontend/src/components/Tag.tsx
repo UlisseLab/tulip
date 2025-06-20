@@ -34,9 +34,9 @@ export const Tag = ({
   excluded = false,
   onClick,
 }: TagProps) => {
-  var tagBackgroundColor = disabled ? "#eee" : color ?? tagToColor(tag);
+  let tagBackgroundColor = disabled ? "#eee" : color ?? tagToColor(tag);
 
-  var tagTextColor = disabled
+  let tagTextColor = disabled
     ? "#bbb"
     : Color(tagBackgroundColor).isDark()
     ? "#fff"
@@ -46,6 +46,7 @@ export const Tag = ({
     tagTextColor = "white";
     tagBackgroundColor = "black";
   }
+
   return (
     <div
       onClick={onClick}
@@ -60,7 +61,11 @@ export const Tag = ({
         color: tagTextColor,
       }}
     >
-      <span style={excluded ? { textDecoration: "line-through" } : {}}>
+      <span
+        className={classNames({
+          "line-through": excluded,
+        })}
+      >
         {tag}
       </span>
     </div>

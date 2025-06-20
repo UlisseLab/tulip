@@ -409,15 +409,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@babel/runtime@npm:^7.7.6":
-  version: 7.18.3
-  resolution: "@babel/runtime@npm:7.18.3"
-  dependencies:
-    regenerator-runtime: "npm:^0.13.4"
-  checksum: 10c0/bb218b2ab2f9b28c7b131f466f4b72d87f998481dd475b315c4fc54c0422e697fdd442dcfef4e8e230424d2933cf56a301af67376f2aaa32c08b1a4b5e59d588
-  languageName: node
-  linkType: hard
-
 "@babel/template@npm:^7.16.7":
   version: 7.16.7
   resolution: "@babel/template@npm:7.16.7"
@@ -793,6 +784,13 @@ __metadata:
     "@eslint/core": "npm:^0.15.0"
     levn: "npm:^0.4.1"
   checksum: 10c0/e069b0a46eb9fa595a1ac7dea4540a9daa493afba88875ee054e9117609c1c41555e779303cb4cff36cf88f603ba6eba2556a927e8ced77002828206ee17fc7e
+  languageName: node
+  linkType: hard
+
+"@fontsource-variable/recursive@npm:^5.2.6":
+  version: 5.2.6
+  resolution: "@fontsource-variable/recursive@npm:5.2.6"
+  checksum: 10c0/35608dbb5d62d4da7a5af6168d3b641e69b40c6e5a60ce9856172bc7ceed183378701af81c0494ca6047ef3d818bdeeb2a8cc47ad4b71f77ca15dc37e86adc89
   languageName: node
   linkType: hard
 
@@ -1765,6 +1763,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cookie@npm:^1.0.1":
+  version: 1.0.2
+  resolution: "cookie@npm:1.0.2"
+  checksum: 10c0/fd25fe79e8fbcfcaf6aa61cd081c55d144eeeba755206c058682257cb38c4bd6795c6620de3f064c740695bb65b7949ebb1db7a95e4636efb8357a335ad3f54b
+  languageName: node
+  linkType: hard
+
 "cosmiconfig@npm:^6.0.0":
   version: 6.0.0
   resolution: "cosmiconfig@npm:6.0.0"
@@ -2666,6 +2671,7 @@ __metadata:
   resolution: "frontend@workspace:."
   dependencies:
     "@eslint-react/eslint-plugin": "npm:^1.52.2"
+    "@fontsource-variable/recursive": "npm:^5.2.6"
     "@heroicons/react": "npm:^1.0.6"
     "@reduxjs/toolkit": "npm:^1.8.5"
     "@tsconfig/vite-react": "npm:^6.3.5"
@@ -2692,7 +2698,7 @@ __metadata:
     react-dom: "npm:^18.0.0"
     react-hotkeys-hook: "npm:^4.4.1"
     react-redux: "npm:^8.0.2"
-    react-router-dom: "npm:^6.3.0"
+    react-router: "npm:^7.6.2"
     react-virtuoso: "npm:^2.12.1"
     tailwindcss: "npm:^3.0.24"
     typescript: "npm:^5.8.3"
@@ -2834,15 +2840,6 @@ __metadata:
   bin:
     hexy: bin/hexy_cmd.js
   checksum: 10c0/1b8c492d16d69d6cd9ec6db62edcf92885b842e63930d74238236de052144919f98243f022efe6395e6558fef380291b073db73525484dc74c7ea14a8bd84695
-  languageName: node
-  linkType: hard
-
-"history@npm:^5.2.0":
-  version: 5.3.0
-  resolution: "history@npm:5.3.0"
-  dependencies:
-    "@babel/runtime": "npm:^7.7.6"
-  checksum: 10c0/812ec839386222d6437bd78d9f05db32e47d105ada0ad8834b32626919dd2fee7a10001bc489510f93a8069d02f118214bd8d42a82f7cf9daf8e84fbcbbb2016
   languageName: node
   linkType: hard
 
@@ -3833,27 +3830,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-router-dom@npm:^6.3.0":
-  version: 6.3.0
-  resolution: "react-router-dom@npm:6.3.0"
+"react-router@npm:^7.6.2":
+  version: 7.6.2
+  resolution: "react-router@npm:7.6.2"
   dependencies:
-    history: "npm:^5.2.0"
-    react-router: "npm:6.3.0"
+    cookie: "npm:^1.0.1"
+    set-cookie-parser: "npm:^2.6.0"
   peerDependencies:
-    react: ">=16.8"
-    react-dom: ">=16.8"
-  checksum: 10c0/490b0c50d46c32ad1a3264f8bcaf6b423bef86dc3b62e9070d5e81d90ce086a73af55834133920fc4125e7c8661ede901a550d73429c969b303d4dd9ce7bbaf2
-  languageName: node
-  linkType: hard
-
-"react-router@npm:6.3.0":
-  version: 6.3.0
-  resolution: "react-router@npm:6.3.0"
-  dependencies:
-    history: "npm:^5.2.0"
-  peerDependencies:
-    react: ">=16.8"
-  checksum: 10c0/ac8785a0b28d363940763e49119e5160331099d4f0196235b143ba9cdc984048ca44a77497f393b12165c99baf8ae6c11386f1f6f20ef52d99c2e07b31920862
+    react: ">=18"
+    react-dom: ">=18"
+  peerDependenciesMeta:
+    react-dom:
+      optional: true
+  checksum: 10c0/c8ef65f2a378f38e3cba900d67fa2b80a41c1c3925102875ee07c12faa01ea40991cb3fbefaf3ff6914e724c755732e3d7dec2b1bdef09e0fddd00fccc85a06a
   languageName: node
   linkType: hard
 
@@ -4028,6 +4017,13 @@ __metadata:
   bin:
     semver: bin/semver.js
   checksum: 10c0/aca305edfbf2383c22571cb7714f48cadc7ac95371b4b52362fb8eeffdfbc0de0669368b82b2b15978f8848f01d7114da65697e56cd8c37b0dab8c58e543f9ea
+  languageName: node
+  linkType: hard
+
+"set-cookie-parser@npm:^2.6.0":
+  version: 2.7.1
+  resolution: "set-cookie-parser@npm:2.7.1"
+  checksum: 10c0/060c198c4c92547ac15988256f445eae523f57f2ceefeccf52d30d75dedf6bff22b9c26f756bd44e8e560d44ff4ab2130b178bd2e52ef5571bf7be3bd7632d9a
   languageName: node
   linkType: hard
 

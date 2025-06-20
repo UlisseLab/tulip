@@ -1,11 +1,6 @@
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
-import {
-  Link,
-  useParams,
-  useSearchParams,
-  useNavigate,
-} from "react-router-dom";
+import { Link, useParams, useSearchParams, useNavigate } from "react-router";
 
 import {
   END_FILTER_KEY,
@@ -23,37 +18,37 @@ import { useGetServicesQuery, useGetTickInfoQuery } from "../api";
 function ServiceSelection() {
   const FILTER_KEY = SERVICE_FILTER_KEY;
 
-  // TODO add all, maybe user react-select
-
   const { data: services } = useGetServicesQuery(undefined, {
     pollingInterval: SERVICE_REFETCH_INTERVAL_MS,
   });
 
-  const service_select = [
-    {
-      ip: "",
-      port: 0,
-      name: "all",
-    },
+  const servicesList: Service[] = [
+    { ip: "", port: 0, name: "all" },
     ...(services || []),
   ];
-  let [searchParams, setSearchParams] = useSearchParams();
+
+  const [service, setService] = useSearchParam<string>(
+    FILTER_KEY,
+    "all",
+    (value) => (value === "all" ? null : value),
+    (value) => (value === null ? "all" : value)
+  );
+
+  console.log("service", service);
+
+  const onChangeService = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedService = event.target.value;
+    setService(selectedService);
+  };
+
   return (
     <select
       className="w-20"
       title="Service"
-      value={searchParams.get(FILTER_KEY) ?? ""}
-      onChange={(event) => {
-        let serviceFilter = event.target.value;
-        if (serviceFilter && serviceFilter != "all") {
-          searchParams.set(FILTER_KEY, serviceFilter);
-        } else {
-          searchParams.delete(FILTER_KEY);
-        }
-        setSearchParams(searchParams);
-      }}
+      value={service}
+      onChange={onChangeService}
     >
-      {service_select.map((service) => (
+      {servicesList.map((service) => (
         <option key={service.name} value={service.name}>
           {service.name}
         </option>
@@ -64,13 +59,15 @@ function ServiceSelection() {
 
 function TextSearch() {
   const FILTER_KEY = TEXT_FILTER_KEY;
-  let [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   useHotkeys("s", (e) => {
-    let el = document.getElementById("search") as HTMLInputElement;
+    const el = document.getElementById("search") as HTMLInputElement;
     el?.focus();
     el?.select();
     e.preventDefault();
   });
+
   return (
     <div>
       <input
@@ -79,8 +76,8 @@ function TextSearch() {
         id="search"
         value={searchParams.get(FILTER_KEY) || ""}
         onChange={(event) => {
-          let textFilter = event.target.value;
-          if (textFilter) {
+          const textFilter = event.target.value;
+          if (textFilter != null && textFilter !== "") {
             searchParams.set(FILTER_KEY, textFilter);
           } else {
             searchParams.delete(FILTER_KEY);
@@ -93,7 +90,7 @@ function TextSearch() {
 }
 
 function useMessyTimeStuff() {
-  let [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const { data: tickInfoData } = useGetTickInfoQuery(undefined, {
     pollingInterval: TICK_REFETCH_INTERVAL_MS,
@@ -126,7 +123,7 @@ function useMessyTimeStuff() {
     if (unixTime === null) {
       return;
     }
-    let unixTimeInt = parseInt(unixTime);
+    const unixTimeInt = parseInt(unixTime);
     if (isNaN(unixTimeInt)) {
       return;
     }
@@ -207,82 +204,66 @@ function EndDateSelection() {
 }
 
 function FirstDiff() {
-  let params = useParams();
-  let [searchParams, setSearchParams] = useSearchParams();
-  const [firstFlow, setFirstFlow] = useState<string>(
-    searchParams.get(FIRST_DIFF_KEY) ?? ""
+  const { id } = useParams();
+
+  const [firstDiffFlow, setFirstDiffFlow] = useSearchParam<string>(
+    FIRST_DIFF_KEY,
+    "",
+    (value) => (value === "" ? null : value),
+    (value) => (value === null ? "" : value)
   );
 
-  function setFirstDiffFlow() {
-    let textFilter = params.id;
-    if (textFilter) {
-      searchParams.set(FIRST_DIFF_KEY, textFilter);
-      setFirstFlow(textFilter);
-    } else {
-      searchParams.delete(FIRST_DIFF_KEY);
-      setFirstFlow("");
-    }
-    setSearchParams(searchParams);
-  }
-
   useHotkeys("f", () => {
-    setFirstDiffFlow();
+    if (id) {
+      setFirstDiffFlow(id);
+    } else {
+      setFirstDiffFlow("");
+    }
   });
 
   return (
     <input
       type="text"
-      className="md:w-72"
+      className="md:w-72 cursor-pointer"
       placeholder="First Diff ID"
       readOnly
-      value={firstFlow}
-      onClick={(_event) => setFirstDiffFlow()}
+      value={firstDiffFlow}
+      title="Click to set first diff flow, right click to clear"
+      onClick={() => setFirstDiffFlow(id ?? null)}
       onContextMenu={(event) => {
-        searchParams.delete(FIRST_DIFF_KEY);
-        setFirstFlow("");
-        setSearchParams(searchParams);
         event.preventDefault();
+        setFirstDiffFlow(null);
       }}
     ></input>
   );
 }
 
 function SecondDiff() {
-  let params = useParams();
-  let [searchParams, setSearchParams] = useSearchParams();
-  const [secondFlow, setSecondFlow] = useState<string>(
-    searchParams.get(SECOND_DIFF_KEY) ?? ""
+  const { id } = useParams();
+
+  const [secondDiffFlow, setSecondDiffFlow] = useSearchParam<string>(
+    SECOND_DIFF_KEY,
+    "",
+    (value) => (value === "" ? null : value),
+    (value) => (value === null ? "" : value)
   );
 
-  function setSecondDiffFlow() {
-    let textFilter = params.id;
-    if (textFilter) {
-      searchParams.set(SECOND_DIFF_KEY, textFilter);
-      setSecondFlow(textFilter);
-    } else {
-      searchParams.delete(SECOND_DIFF_KEY);
-      setSecondFlow("");
-    }
-    setSearchParams(searchParams);
-  }
-
   useHotkeys("g", () => {
-    setSecondDiffFlow();
+    setSecondDiffFlow(id ?? "");
   });
 
   return (
     <input
       type="text"
-      className="md:w-72"
+      className="md:w-72 cursor-pointer"
       placeholder="Second Flow ID"
+      title="Click to set second diff flow, right click to clear"
       readOnly
-      value={secondFlow}
-      onClick={(_event) => setSecondDiffFlow()}
-      onContextMenu={(event) => {
-        searchParams.delete(SECOND_DIFF_KEY);
-        setSecondFlow("");
-        setSearchParams(searchParams);
-        event.preventDefault();
+      value={secondDiffFlow}
+      onClick={() => setSecondDiffFlow(id ?? null)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setSecondDiffFlow(null);
       }}
     ></input>
   );
@@ -293,20 +274,16 @@ function Diff() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  function navigateToDiff() {
+  const navigateToDiff = () =>
     navigate(`/diff/${params.id ?? ""}?${searchParams}`, { replace: true });
-  }
 
-  useHotkeys("d", () => {
-    navigateToDiff();
-  });
+  useHotkeys("d", navigateToDiff);
 
   return (
     <button
+      type="button"
       className=" bg-amber-100 text-gray-800 rounded-md px-2 py-1"
-      onClick={() => {
-        navigateToDiff();
-      }}
+      onClick={navigateToDiff}
     >
       Diff
     </button>
@@ -314,6 +291,8 @@ function Diff() {
 }
 
 import ulisseImg from "../../assets/Logo_60.png";
+import { useSearchParam } from "../store/param";
+import type { Service } from "../types";
 
 export function Header() {
   const [searchParams] = useSearchParams();
@@ -357,6 +336,7 @@ export function Header() {
       </div>
       <div>
         <button
+          type="button"
           className=" bg-amber-100 text-gray-800 rounded-md px-2 py-1"
           onClick={() => setToLastnTicks(5)}
         >
@@ -368,7 +348,7 @@ export function Header() {
           Graph view
         </div>
       </Link>
-      <div className="ml-auto mr-4" style={{ display: "flex" }}>
+      <div className="ml-auto mr-4 flex">
         <div className="mr-4">
           <FirstDiff />
         </div>
@@ -380,15 +360,7 @@ export function Header() {
             <Diff />
           </Suspense>
         </div>
-        <div
-          className="ml-auto"
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignContent: "center",
-            flexDirection: "column",
-          }}
-        >
+        <div className="ml-auto flex justify-center align-center flex-col">
           Current: {currentTick}
         </div>
       </div>

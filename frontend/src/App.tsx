@@ -1,8 +1,12 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router";
 import { useHotkeys } from "react-hotkeys-hook";
 
+// @ts-expect-error - we should fix type declarations
+import "@fontsource-variable/recursive";
+
 import "./App.css";
+
 import { Header } from "./components/Header";
 import { Home } from "./pages/Home";
 

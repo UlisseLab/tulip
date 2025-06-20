@@ -1,9 +1,4 @@
-import {
-  useSearchParams,
-  Link,
-  useParams,
-  useNavigate,
-} from "react-router-dom";
+import { useSearchParams, Link, useParams, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import type { Flow } from "../types";
@@ -32,6 +27,7 @@ import {
   useGetTagsQuery,
   useStarFlowMutation,
 } from "../api";
+import { useSearchParam } from "../store/param";
 
 export function FlowList() {
   const [searchParams] = useSearchParams();
@@ -43,11 +39,47 @@ export function FlowList() {
   const { data: availableTags } = useGetTagsQuery();
   const { data: services } = useGetServicesQuery();
 
-  const filterTags = useAppSelector((state) => state.filter.filterTags);
   const filterFlags = useAppSelector((state) => state.filter.filterFlags);
   const filterFlagids = useAppSelector((state) => state.filter.filterFlagids);
-  const includeTags = useAppSelector((state) => state.filter.includeTags);
-  const excludeTags = useAppSelector((state) => state.filter.excludeTags);
+
+  type FilterTags = {
+    include: string[];
+    exclude: string[];
+  };
+
+  const [filterTags, setFilterTags] = useSearchParam<FilterTags>(
+    "tags",
+    { include: [], exclude: [] },
+    (value) => {
+      if (value.include.length === 0 && value.exclude.length === 0) {
+        return null; // if both include and exclude are empty, we don't want to set the search param
+      }
+      return JSON.stringify(value);
+    },
+    (value) => JSON.parse(value) as FilterTags
+  );
+
+  const onTagClick = (tag: string) => {
+    // if the tag is already included, we want to exclude it
+    if (filterTags.include.includes(tag)) {
+      setFilterTags({
+        include: filterTags.include.filter((t) => t !== tag),
+        exclude: [...filterTags.exclude, tag],
+      });
+    } else if (filterTags.exclude.includes(tag)) {
+      // if the tag is already excluded, we want to remove it from both include and exclude
+      setFilterTags({
+        include: filterTags.include.filter((t) => t !== tag),
+        exclude: filterTags.exclude.filter((t) => t !== tag),
+      });
+    } else {
+      // if the tag is not included or excluded, we want to include it
+      setFilterTags({
+        include: [...filterTags.include, tag],
+        exclude: filterTags.exclude.filter((t) => t !== tag),
+      });
+    }
+  };
 
   const dispatch = useAppDispatch();
 
@@ -57,8 +89,14 @@ export function FlowList() {
 
   const virtuoso = useRef<VirtuosoHandle>(null);
 
-  const service_name = searchParams.get(SERVICE_FILTER_KEY) ?? "";
-  const service = services?.find((s) => s.name == service_name);
+  const [serviceName] = useSearchParam<string>(
+    SERVICE_FILTER_KEY,
+    "",
+    (value) => value,
+    (value) => value
+  );
+
+  const service = services?.find((s) => s.name == serviceName);
 
   const text_filter = searchParams.get(TEXT_FILTER_KEY) ?? undefined;
   const from_filter = searchParams.get(START_FILTER_KEY) ?? undefined;
@@ -81,17 +119,17 @@ export function FlowList() {
       dst_port: service?.port,
       from_time: from_filter_num,
       to_time: to_filter_num,
-      service: "", // FIXME
-      tags: filterTags,
+      service: service?.name ?? "",
+      tags: filterTags.include,
       flags: filterFlags,
       flagids: filterFlagids,
-      includeTags: includeTags,
-      excludeTags: excludeTags,
+      includeTags: filterTags.include,
+      excludeTags: filterTags.exclude,
     },
     {
       refetchOnMountOrArgChange: true,
       pollingInterval: FLOW_LIST_REFETCH_INTERVAL_MS,
-    },
+    }
   );
 
   // TODO: fix the below transformation - move it to server
@@ -131,6 +169,7 @@ export function FlowList() {
   // so because performance, we hack this by checking if the transformedFlowData length changed
   const [transformedFlowDataLength, setTransformedFlowDataLength] =
     useState<number>(0);
+
   useEffect(() => {
     if (
       transformedFlowData &&
@@ -154,11 +193,13 @@ export function FlowList() {
     "j",
     () =>
       setFlowIndex((fi) =>
-        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1),
+        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1)
       ),
-    [transformedFlowData?.length],
+    [transformedFlowData?.length]
   );
+
   useHotkeys("k", () => setFlowIndex((fi) => Math.max(0, fi - 1)));
+
   useHotkeys(
     "i",
     () => {
@@ -167,8 +208,9 @@ export function FlowList() {
         dispatch(toggleFilterTag("flag-in"));
       }
     },
-    [availableTags],
+    [availableTags]
   );
+
   useHotkeys(
     "o",
     () => {
@@ -177,7 +219,7 @@ export function FlowList() {
         dispatch(toggleFilterTag("flag-out"));
       }
     },
-    [availableTags],
+    [availableTags]
   );
   useHotkeys("r", () => refetch());
 
@@ -186,20 +228,15 @@ export function FlowList() {
   return (
     <div className="flex flex-col h-full">
       <div className="bg-white border-b-gray-300 border-b shadow-md flex flex-col">
-        <div className="p-2 flex" style={{ height: 50 }}>
+        <div className="p-2 flex h-12">
           <button
+            type="button"
             className="flex gap-1 items-center text-sm"
             onClick={() => setShowFilters(!showFilters)}
           >
             {<FilterIcon height={20} className="text-gray-400"></FilterIcon>}
             {showFilters ? "Close" : "Open"} filters
           </button>
-          {/* Maybe we want to use a search button instead of live search */}
-          {false && (
-            <button className="ml-auto items-center bg-blue-600 text-white px-2 rounded-md text-sm">
-              Search
-            </button>
-          )}
         </div>
         {showFilters && (
           <div className="border-t-gray-300 border-t p-2">
@@ -211,10 +248,13 @@ export function FlowList() {
                 <Tag
                   key={tag}
                   tag={tag}
-                  disabled={!includeTags.includes(tag)}
-                  excluded={excludeTags.includes(tag)}
-                  onClick={() => dispatch(toggleFilterTag(tag))}
-                ></Tag>
+                  disabled={
+                    !filterTags.include.includes(tag) &&
+                    !filterTags.exclude.includes(tag)
+                  }
+                  excluded={filterTags.exclude.includes(tag)}
+                  onClick={() => onTagClick(tag)}
+                />
               ))}
             </div>
           </div>

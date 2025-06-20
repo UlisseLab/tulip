@@ -1,10 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "Recursive Variable", sans-serif;
+}
+
 /* Grid */
 .grid-container {
   display: grid;
   grid-template-columns: 400px 1fr;
   grid-template-rows: 50px calc(100vh - 50px);
-  grid-column-gap: 0px;
-  grid-row-gap: 0px;
+  column-gap: 0;
+  row-gap: 0;
 }
 
 .flow-list-area {

@@ -33,8 +33,8 @@ function generateShortcutTable(data: { key: string; action: string }[][]) {
             </tr>
           </thead>
           <tbody>
-            {table.map((row, rowIndex) => (
-              <tr key={rowIndex}>
+            {table.map((row) => (
+              <tr key={row.action}>
                 {Object.entries(row).map((cell, cellIndex) => (
                   <td className="border border-slate-700 px-4" key={cellIndex}>
                     {cell[1]}
