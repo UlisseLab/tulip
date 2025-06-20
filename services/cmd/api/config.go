@@ -14,8 +14,8 @@ import (
 
 // Service represents a single service with a name and port.
 type Service struct {
-	Name string `json:"name"`
-	Port int    `json:"port"`
+	Name string
+	Port int
 }
 
 // Config holds all configuration values for the application.
