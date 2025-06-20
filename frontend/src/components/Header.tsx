@@ -337,14 +337,14 @@ export function Header() {
       <div>
         <button
           type="button"
-          className=" bg-amber-100 text-gray-800 rounded-md px-2 py-1"
+          className="bg-amber-100 text-gray-800 rounded-md px-2 py-1 text-center text-sm cursor-pointer hover:bg-amber-200"
           onClick={() => setToLastnTicks(5)}
         >
           Last 5 ticks
         </button>
       </div>
       <Link to={`/corrie?${searchParams}`}>
-        <div className="bg-blue-100 text-gray-800 rounded-md px-2 py-1">
+        <div className="bg-blue-100 text-gray-800 rounded-md px-2 py-1 text-center text-sm hover:bg-blue-200 cursor-pointer">
           Graph view
         </div>
       </Link>

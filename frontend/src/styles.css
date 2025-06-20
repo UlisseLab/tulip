@@ -1,9 +1,7 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-body {
-  font-family: "Recursive Variable", sans-serif;
+@theme {
+  --default-font-family: "Recursive Variable", sans-serif;
 }
 
 /* Grid */
@@ -32,18 +30,11 @@ body {
   border-bottom: 1px solid rgba(0, 0, 0, 0.2);
 }
 
-/* no need for footer
-.footer-area {
-  grid-area: 3 / 1 / 4 / 3;
-}*/
-
-/* Header */
-
 .header {
   display: flex;
   align-items: center;
   height: 50px;
-  @apply gap-3;
+  @apply gap-4;
 
   input,
   select {

@@ -12,10 +12,13 @@ import {
 import { useAppSelector, useAppDispatch } from "../store";
 import { toggleFilterTag } from "../store/filter";
 
-import { HeartIcon, FilterIcon, LinkIcon } from "@heroicons/react/solid";
-import { HeartIcon as EmptyHeartIcon } from "@heroicons/react/outline";
+import {
+  HeartIcon,
+  AdjustmentsHorizontalIcon,
+  LinkIcon,
+} from "@heroicons/react/20/solid";
+import { HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 
-import classes from "./FlowList.module.css";
 import { format } from "date-fns";
 import useDebounce from "../hooks/useDebounce";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
@@ -228,18 +231,22 @@ export function FlowList() {
   return (
     <div className="flex flex-col h-full">
       <div className="bg-white border-b-gray-300 border-b shadow-md flex flex-col">
-        <div className="p-2 flex h-12">
-          <button
-            type="button"
-            className="flex gap-1 items-center text-sm"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            {<FilterIcon height={20} className="text-gray-400"></FilterIcon>}
-            {showFilters ? "Close" : "Open"} filters
-          </button>
-        </div>
+        <button
+          type="button"
+          className="flex justify-center gap-1 h-12 w-full items-center text-sm cursor-pointer hover:bg-gray-100 "
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          {
+            <AdjustmentsHorizontalIcon
+              height={20}
+              className="text-gray-400"
+            ></AdjustmentsHorizontalIcon>
+          }
+          {showFilters ? "Close" : "Open"} filters
+        </button>
+
         {showFilters && (
-          <div className="border-t-gray-300 border-t p-2">
+          <div className="border-t-gray-300 border-t p-2 transition-all duration-300">
             <p className="text-sm font-bold text-gray-600 pb-2">
               Intersection filter
             </p>
@@ -262,9 +269,7 @@ export function FlowList() {
       </div>
       <div></div>
       <Virtuoso
-        className={classNames({
-          "flex-1": true,
-          [classes.list_container]: true,
+        className={classNames(["flex", "flex-col", "flex-1"], {
           "sidebar-loading": isLoading,
         })}
         data={transformedFlowData}
@@ -275,8 +280,6 @@ export function FlowList() {
             to={`/flow/${flow._id}?${searchParams}`}
             onClick={() => setFlowIndex(index)}
             key={flow._id}
-            className="focus-visible:rounded-md"
-            //style={{ paddingTop: '1em' }}
           >
             <FlowListEntry
               key={flow._id}
@@ -308,7 +311,8 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
   return (
     <li
       className={classNames({
-        [classes.active]: isActive,
+        "bg-gray-100 p-2 focus:ring-4 border-t border-gray-200 list-none": true,
+        "border-y border-l-4 border-gray-500 bg-gray-300/50": isActive,
       })}
     >
       <div className="flex">
@@ -335,7 +339,7 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
           <div className="flex">
             <div className="shrink-0">
               →{" "}
-              <span className="text-gray-700 font-bold overflow-ellipsis overflow-hidden ">
+              <span className="text-gray-700 font-bold text-ellipsis overflow-hidden">
                 {flow.service_tag}
               </span>
               <span className="text-gray-500"> (:{flow.dst_port})</span>

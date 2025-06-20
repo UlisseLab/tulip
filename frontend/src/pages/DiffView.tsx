@@ -39,7 +39,7 @@ function Flow(flow1: string, flow2: string) {
 }
 
 function isASCII(str: string) {
-  return /^[\x00-\x7F]*$/.test(str);
+  return Array.from(str).every((ch) => ch.charCodeAt(0) <= 127);
 }
 
 const displayOptions = ["Plain", "Hex"];
@@ -68,17 +68,45 @@ const deriveDisplayMode = (
 };
 
 export function DiffView() {
-  let [searchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const firstFlowId = searchParams.get(FIRST_DIFF_KEY);
   const secondFlowId = searchParams.get(SECOND_DIFF_KEY);
 
-  let { data: firstFlow, isLoading: firstFlowLoading } = useGetFlowQuery(
+  // If either flow id is not provided, we skip the query
+  if (firstFlowId === null || secondFlowId === null) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <div>
+          <p className="text-red-500 text-lg font-semibold mb-2">
+            Error: Missing Flow IDs
+          </p>
+          <p className="text-gray-500 mb-4">
+            Please ensure that both flow IDs are provided in the URL query
+            parameters.
+          </p>
+          <p className="text-gray-500 mb-4">
+            Example:{" "}
+            <code>
+              ?{FIRST_DIFF_KEY}=flow1Id&{SECOND_DIFF_KEY}=flow2Id
+            </code>
+          </p>
+          <p className="text-gray-500 mb-4">
+            If you are trying to compare flows, please select two flows from the
+            sidebar using <kbd>f</kbd> and <kbd>g</kbd> keys.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const { data: firstFlow, isLoading: firstFlowLoading } = useGetFlowQuery(
     firstFlowId!,
     {
       skip: firstFlowId === null,
     }
   );
-  let { data: secondFlow, isLoading: secondFlowLoading } = useGetFlowQuery(
+
+  const { data: secondFlow, isLoading: secondFlowLoading } = useGetFlowQuery(
     secondFlowId!,
     {
       skip: secondFlowId === null,

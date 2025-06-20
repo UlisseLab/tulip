@@ -4,8 +4,7 @@ import { useHotkeys } from "react-hotkeys-hook";
 
 // @ts-expect-error - we should fix type declarations
 import "@fontsource-variable/recursive";
-
-import "./App.css";
+import "./styles.css"
 
 import { Header } from "./components/Header";
 import { Home } from "./pages/Home";
@@ -20,6 +19,7 @@ function App() {
   useHotkeys("esc", () => (document.activeElement as HTMLElement).blur(), {
     enableOnFormTags: true,
   });
+
   return (
     <BrowserRouter>
       <Routes>

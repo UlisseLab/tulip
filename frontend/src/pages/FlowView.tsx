@@ -9,12 +9,12 @@ import {
   API_BASE_PATH,
 } from "../const";
 import {
-  ArrowCircleLeftIcon,
-  ArrowCircleRightIcon,
-  ArrowCircleUpIcon,
-  ArrowCircleDownIcon,
-  DownloadIcon,
-} from "@heroicons/react/solid";
+  ArrowLeftCircleIcon,
+  ArrowRightCircleIcon,
+  ArrowUpCircleIcon,
+  ArrowDownCircleIcon,
+  ArrowDownTrayIcon,
+} from "@heroicons/react/24/solid";
 import { format } from "date-fns";
 
 import { hexy } from "hexy";
@@ -256,13 +256,13 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
 
   return (
     <div className="text-mono" id={id}>
-      <div className="sticky shadow-md bg-white overflow-auto py-1 border-y top-12">
+      <div className="sticky shadow-md bg-white overflow-auto py-1 border-y border-gray-300 top-12">
         <div className="flex items-center h-6">
           <div className="w-8 px-2">
             {flow.from === "s" ? (
-              <ArrowCircleLeftIcon className="fill-green-700" />
+              <ArrowLeftCircleIcon className="fill-green-700" />
             ) : (
-              <ArrowCircleRightIcon className="fill-red-700" />
+              <ArrowRightCircleIcon className="fill-red-700" />
             )}
           </div>
           <div className="w-52">
@@ -397,7 +397,7 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
       ) : undefined}
       <div className="bg-yellow-200 p-2">
         <div className="font-extrabold">Meta</div>
-        <div className="pl-2 grid grid-cols-[max-content,1fr] gap-x-4">
+        <div className="pl-2 grid grid-cols-[max-content_1fr] gap-x-4">
           <span className="text-right">Source: </span>
           <span>
             <a
@@ -405,7 +405,7 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
               href={`${API_BASE_PATH}/download/?file=${flow.filename}`}
             >
               {flow.filename}
-              <DownloadIcon className="inline-flex items-baseline w-5 h-5" />
+              <ArrowDownTrayIcon className="inline-flex items-baseline w-5 h-5" />
             </a>
           </span>
 
@@ -556,17 +556,38 @@ export function FlowView() {
   }, [currentFlow]);
 
   if (isError) {
-    return <div>Error while fetching flow</div>;
+    return (
+      <div className="w-full h-full flex  justify-center items-center">
+        <div>
+          <h2 className="text-3xl font-bold mb-4">Error</h2>
+          <p className="text-red-500 text-lg mb-2">
+            Error fetching flow with id:
+          </p>
+          <code className="font-mono border border-gray-300 p-2 w-full block">
+            {id}
+          </code>
+          <p className="text-gray-500 mt-4">
+            Please check the id and try again.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (isLoading || flow == undefined) {
-    return <div>Loading...</div>;
+    return (
+      <div className="w-full h-full flex justify-center items-center">
+        <div>
+          <h2 className="text-6xl font-bold mb-4 animate-pulse">Loading flow...</h2>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div>
       <div
-        className={`sticky shadow-md top-0 bg-white overflow-auto border-b border-b-gray-300 flex z-[100]`}
+        className={`sticky shadow-md top-0 bg-white overflow-auto border-b border-b-gray-300 flex z-100`}
         style={{ height: SECONDARY_NAVBAR_HEIGHT }}
       >
         {flow?.child_id != "000000000000000000000000" ||
@@ -589,7 +610,7 @@ export function FlowView() {
                 }
               }}
             >
-              <ArrowCircleUpIcon className="inline-flex items-baseline w-5 h-5"></ArrowCircleUpIcon>{" "}
+              <ArrowUpCircleIcon className="inline-flex items-baseline w-5 h-5"></ArrowUpCircleIcon>{" "}
               Parent
             </button>
             <button
@@ -609,7 +630,7 @@ export function FlowView() {
                 }
               }}
             >
-              <ArrowCircleDownIcon className="inline-flex items-baseline w-5 h-5"></ArrowCircleDownIcon>{" "}
+              <ArrowDownCircleIcon className="inline-flex items-baseline w-5 h-5"></ArrowDownCircleIcon>{" "}
               Child
             </button>
           </div>
