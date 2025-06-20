@@ -62,6 +62,8 @@ func (api *API) getTickInfo(c echo.Context) error {
 
 func (api *API) query(c echo.Context) error {
 
+	// TODO: this is horrible, the API layer should not be aware of the database structure
+
 	type flowQueryRequest struct {
 		IncludeTags []string `json:"includeTags"`
 		ExcludeTags []string `json:"excludeTags"`
