@@ -13,8 +13,6 @@
 package assembler
 
 import (
-	"bufio"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -26,7 +24,6 @@ import (
 	"github.com/google/gopacket/ip4defrag"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/reassembly"
 )
 
@@ -42,7 +39,7 @@ type Service struct {
 }
 
 type Config struct {
-	DB            db.Database   // the database to use for storing flows
+	DB            db.Database    // the database to use for storing flows
 	BpfFilter     string         // BPF filter to apply to the pcap handle
 	FlushInterval time.Duration  // Interval to flush non-terminated connections
 	FlagRegex     *regexp.Regexp // Regex to apply for flagging flows
@@ -119,6 +116,12 @@ func (s *Service) FlushConnections() {
 }
 
 func (s *Service) ProcessPcapHandle(handle *pcap.Handle, fname string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Recovered from panic in ProcessPcapHandle", "error", r, "file", fname)
+		}
+	}()
+
 	if s.BpfFilter != "" {
 		if err := handle.SetBPFFilter(s.BpfFilter); err != nil {
 			slog.Error("Failed to set BPF filter", "error", err, "filter", s.BpfFilter)
@@ -241,100 +244,6 @@ func (s *Service) ProcessPcapHandle(handle *pcap.Handle, fname string) {
 
 	slog.Info("Processed packets", "count", count-processedCount, "file", fname)
 	s.DB.InsertPcap(fname, count)
-}
-
-func (s Service) HandlePcapFile(file *os.File, fname string) {
-	var handle *pcap.Handle
-	var err error
-
-	if handle, err = pcap.OpenOfflineFile(file); err != nil {
-		slog.Error("PCAP OpenOfflineFile error", "err", err)
-		return
-	}
-	defer handle.Close()
-
-	s.ProcessPcapHandle(handle, fname)
-}
-
-// HandlePcapStream ingests a PCAP stream from any io.Reader (e.g., TCP connection)
-func (s Service) HandlePcapStream(r io.Reader, fname string) {
-	br := bufio.NewReader(r)
-	magic, err := br.Peek(4)
-	if err != nil {
-		slog.Error("Failed to peek PCAP magic", "err", err)
-		return
-	}
-
-	var (
-		source   *gopacket.PacketSource
-		linktype layers.LinkType
-	)
-
-	if len(magic) == 4 && magic[0] == 0x0a && magic[1] == 0x0d && magic[2] == 0x0d && magic[3] == 0x0a {
-		// PCAPNG
-		ngReader, err := pcapgo.NewNgReader(br, pcapgo.DefaultNgReaderOptions)
-		if err != nil {
-			slog.Error("PCAPNG NewNgReader error", "err", err)
-			return
-		}
-		linktype = ngReader.LinkType()
-		source = gopacket.NewPacketSource(ngReader, linktype)
-	} else {
-		// Classic PCAP
-		reader, err := pcapgo.NewReader(br)
-		if err != nil {
-			slog.Error("PCAP NewReader error", "err", err)
-			return
-		}
-		linktype = reader.LinkType()
-		source = gopacket.NewPacketSource(reader, linktype)
-	}
-
-	source.Lazy = s.TcpLazy
-	source.NoCopy = true
-
-	count := int64(0)
-	lastFlush := time.Now()
-
-	for packet := range source.Packets() {
-		count++
-
-		data := packet.Data()
-		_ = data // could be used for stats
-
-		transport := packet.TransportLayer()
-		if transport == nil {
-			continue
-		}
-
-		switch transport.LayerType() {
-		case layers.LayerTypeTCP:
-			tcp := transport.(*layers.TCP)
-			flow := packet.NetworkLayer().NetworkFlow()
-			captureInfo := packet.Metadata().CaptureInfo
-			captureInfo.AncillaryData = []any{fname}
-			context := &Context{CaptureInfo: captureInfo}
-			s.AssemblerTcp.AssembleWithContext(flow, tcp, context)
-
-		case layers.LayerTypeUDP:
-			udp := transport.(*layers.UDP)
-			flow := packet.NetworkLayer().NetworkFlow()
-			captureInfo := packet.Metadata().CaptureInfo
-			s.AssemblerUdp.Assemble(flow, udp, &captureInfo, fname)
-
-		default:
-			slog.Warn("Unsupported transport layer", "layer", transport.LayerType().String(), "file", fname)
-		}
-
-		// Try flushing connections periodically
-		if s.FlushInterval != 0 && lastFlush.Add(s.FlushInterval).Unix() < time.Now().Unix() {
-			s.FlushConnections()
-			slog.Info("Processed packets (stream)", "count", count, "file", fname)
-			lastFlush = time.Now()
-		}
-	}
-
-	slog.Info("Processed packets (stream)", "count", count, "file", fname)
 }
 
 func (s Service) HandlePcapUri(fname string) {

@@ -105,7 +105,7 @@ func (a *UdpAssembler) CompleteReassembly(stream *UdpStream) *db.FlowEntry {
 		ChildId:      primitive.NilObjectID,
 		Blocked:      false,
 		Tags:         []string{"udp"},
-		Suricata:     []int{},
+		Suricata:     []string{},
 		Filename:     stream.Source,
 		Flow:         stream.Items,
 		Flags:        []string{},

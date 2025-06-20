@@ -168,10 +168,9 @@ func runAssembler(cmd *cobra.Command, args []string) {
 				continue
 			}
 			seen[fullPath] = struct{}{}
-			go func(path string) {
-				slog.Info("Ingesting new PCAP file", slog.String("file", path))
-				service.HandlePcapUri(path)
-			}(fullPath)
+
+			slog.Info("Ingesting new PCAP file", slog.String("file", fullPath))
+			service.HandlePcapUri(fullPath)
 		}
 		time.Sleep(pollInterval)
 	}

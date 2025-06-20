@@ -119,12 +119,9 @@ func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 			opts := &db.GetFlowsOptions{}
 
 			// Parse the request parameters
-			opts.Limit = request.GetInt("limit", 10)
-			if opts.Limit >= 5 {
-				return mcp.NewToolResultError("Limit must be less than 5"), nil
-			}
-			if opts.Limit <= 0 {
-				return mcp.NewToolResultError("Limit must be greater than 0"), nil
+			opts.Limit = request.GetInt("limit", 0)
+			if opts.Limit < 0 {
+				return mcp.NewToolResultError("Limit must be a non-negative integer"), nil
 			}
 
 			opts.SrcIp = request.GetString("src_ip", "")
@@ -159,11 +156,12 @@ func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 	)
 
 	strToClientServer := func(str string) string {
-		if str == "c" {
+		switch str {
+		case "c":
 			return "Client to Server"
-		} else if str == "s" {
+		case "s":
 			return "Server to Client"
-		} else {
+		default:
 			return "Unknown Direction"
 		}
 	}

@@ -37,7 +37,7 @@ type FlowEntry struct {
 	ParentId     primitive.ObjectID `bson:"parent_id" json:"parent_id"` // Parent flow ID if this is a child flow
 	ChildId      primitive.ObjectID `bson:"child_id" json:"child_id"`   // Child flow ID if this is a parent flow
 	Fingerprints []uint32           `bson:"fingerprints" json:"fingerprints"`
-	Suricata     []int              `bson:"suricata" json:"suricata"`
+	Suricata     []string           `bson:"suricata" json:"suricata"`
 	Flow         []FlowItem         `bson:"flow" json:"flow"`
 	Tags         []string           `bson:"tags" json:"tags"`       // Tags associated with this flow, e.g. "starred", "tcp", "udp", "blocked"
 	Size         int                `bson:"size" json:"size"`       // Size of the flow in bytes
@@ -46,7 +46,7 @@ type FlowEntry struct {
 }
 
 type Database interface {
-	GetFlowList(filters bson.M) ([]FlowEntry, error) // Get a list of flows with optional filters
+	GetFlowList(filters bson.D) ([]FlowEntry, error) // Get a list of flows with optional filters
 	GetTagList() ([]string, error)                   // Get a list of all tags
 	GetSignature(id string) (Signature, error)       // Get a signature by ID
 	SetStar(flowID string, star bool) error          // Set or unset the "starred" tag on a flow

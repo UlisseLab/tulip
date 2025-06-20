@@ -164,7 +164,7 @@ func (t *TcpStream) ReassemblyComplete(ac reassembly.AssemblerContext) bool {
 		ChildId:     primitive.NilObjectID,
 		Blocked:     false,
 		Tags:        []string{"tcp"},
-		Suricata:    make([]int, 0),
+		Suricata:    []string{},
 		Filename:    t.source,
 		Flow:        t.FlowItems,
 		Size:        t.totalSize,

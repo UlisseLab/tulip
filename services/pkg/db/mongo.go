@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,16 +33,17 @@ type MongoDatabase struct {
 }
 
 // GetFlowList implements filtering logic similar to the Python getFlowList
-func (db MongoDatabase) GetFlowList(filters bson.M) ([]FlowEntry, error) {
+func (db MongoDatabase) GetFlowList(filters bson.D) ([]FlowEntry, error) {
 	collection := db.client.Database("pcap").Collection("pcap")
 
 	opt := options.Find().
+		SetLimit(0).                     // No limit, we want all matching flows
 		SetSort(bson.M{"time": -1}).     // Sort by time descending
 		SetProjection(bson.M{"flow": 0}) // Exclude flow details for performance
 
 	// If filters are nil, use an empty filter
 	if filters == nil {
-		filters = bson.M{}
+		filters = bson.D{}
 	}
 
 	cur, err := collection.Find(context.TODO(), filters, opt)
@@ -54,9 +56,12 @@ func (db MongoDatabase) GetFlowList(filters bson.M) ([]FlowEntry, error) {
 	results := make([]FlowEntry, 0)
 	for cur.Next(context.TODO()) {
 		var entry FlowEntry
-		if err := cur.Decode(&entry); err == nil {
-			results = append(results, entry)
+		err := cur.Decode(&entry)
+		if err != nil {
+			slog.Error("Failed to decode flow entry", "error", err)
+			continue // Skip this entry if decoding fails
 		}
+		results = append(results, entry)
 	}
 
 	return results, nil
@@ -125,6 +130,7 @@ func (db MongoDatabase) GetTagList() ([]string, error) {
 func (db MongoDatabase) GetSignature(id string) (Signature, error) {
 	collection := db.client.Database("pcap").Collection("signatures")
 	var result Signature
+
 	// Try as ObjectID first
 	objID, err := primitive.ObjectIDFromHex(id)
 
@@ -583,8 +589,7 @@ func (db MongoDatabase) GetFlows(ctx context.Context, opts *GetFlowsOptions) ([]
 	collection := db.client.Database("pcap").Collection("pcap")
 	query := bson.M{}
 
-	findOpts := options.Find().
-		SetSort(bson.M{"time": -1})
+	findOpts := options.Find().SetSort(bson.M{"time": -1})
 
 	if opts != nil {
 		if opts.Limit > 0 {

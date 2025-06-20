@@ -56,7 +56,7 @@ func writeTempFile(t *testing.T, data []byte, suffix string) string {
 
 type NoopDatabase struct{}
 
-func (n *NoopDatabase) GetFlowList(filters bson.M) ([]db.FlowEntry, error) { return nil, nil }
+func (n *NoopDatabase) GetFlowList(filters bson.D) ([]db.FlowEntry, error) { return nil, nil }
 func (n *NoopDatabase) GetTagList() ([]string, error)                      { return nil, nil }
 func (n *NoopDatabase) GetSignature(id string) (db.Signature, error)       { return db.Signature{}, nil }
 func (n *NoopDatabase) SetStar(flowID string, star bool) error             { return nil }

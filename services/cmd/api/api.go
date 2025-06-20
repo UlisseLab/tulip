@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +19,8 @@ import (
 	"tulip/pkg/db"
 
 	"github.com/labstack/echo/v4"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // API holds dependencies for handlers
@@ -59,112 +62,153 @@ func (api *API) getTickInfo(c echo.Context) error {
 
 func (api *API) query(c echo.Context) error {
 
-	var filters map[string]any
-	if err := c.Bind(&filters); err != nil {
+	type flowQueryRequest struct {
+		IncludeTags []string `json:"includeTags"`
+		ExcludeTags []string `json:"excludeTags"`
+		FlowData    string   `json:"flow.data"`
+		DstIp       string   `json:"dst_ip"`
+		DstPort     int      `json:"dst_port"`
+		FromTime    int      `json:"from_time"`
+		ToTime      int      `json:"to_time"`
+		FlagIds     []string `json:"flagids"`
+		Flags       []string `json:"flags"`
+		Service     string   `json:"service"` // Deprecated: not used anymore
+	}
+
+	var req flowQueryRequest
+	if err := c.Bind(&req); err != nil {
+		slog.Error("Failed to bind request", "error", err, "url", c.Request().URL.String())
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
 	}
 
-	f := make(map[string]any)
+	filter := bson.D{}
 
 	// Handle "flow.data" regex filter
-	if v, ok := filters["flow.data"]; ok {
-		// MongoDB regex query
-		f["flow.data"] = map[string]any{
-			"$regex":   v,
-			"$options": "i",
-		}
+	if req.FlowData != "" {
+		filter = append(filter, bson.E{
+			Key: "flow.data",
+			Value: bson.M{
+				"$regex":   req.FlowData,
+				"$options": "i", // Case-insensitive regex
+			},
+		})
 	}
 
 	// Handle "dst_ip"
-	if v, ok := filters["dst_ip"]; ok {
-		f["dst_ip"] = v
+	if req.DstIp != "" {
+		filter = append(filter, bson.E{Key: "dst_ip", Value: req.DstIp})
 	}
 
 	// Handle "dst_port"
-	if v, ok := filters["dst_port"]; ok {
-		dstPortStr := ""
-		switch vv := v.(type) {
-		case float64:
-			dstPortStr = strconv.Itoa(int(vv))
-		case string:
-			dstPortStr = vv
-		}
-		dstPortInt, err := strconv.Atoi(dstPortStr)
-		if err == nil {
-			if dstPortInt == -1 {
-				// Remove dst_ip
-				delete(f, "dst_ip")
-				// Exclude all service ports
-				ninPorts := []int{}
-				for _, svc := range api.Config.Services {
-					if svc.Port != 0 {
-						ninPorts = append(ninPorts, svc.Port)
-					}
+	if req.DstPort != 0 {
+		if req.DstPort == -1 {
+			// Remove dst_ip
+			for i, e := range filter {
+				if e.Key == "dst_ip" {
+					filter = append(filter[:i], filter[i+1:]...)
+					break
 				}
-				f["dst_port"] = map[string]any{
-					"$nin": ninPorts,
-				}
-			} else {
-				f["dst_port"] = dstPortInt
 			}
+
+			// Exclude all service ports
+			ninPorts := []int{}
+			for _, svc := range api.Config.Services {
+				if svc.Port != 0 {
+					ninPorts = append(ninPorts, svc.Port)
+				}
+			}
+			filter = append(filter, bson.E{Key: "dst_port", Value: bson.M{"$nin": ninPorts}})
+		} else {
+			filter = append(filter, bson.E{Key: "dst_port", Value: req.DstPort})
 		}
 	}
 
 	// Handle time range
-	fromTime, fromOk := filters["from_time"]
-	toTime, toOk := filters["to_time"]
-	if fromOk && toOk {
-		fromInt := 0
-		toInt := 0
-		switch v := fromTime.(type) {
-		case float64:
-			fromInt = int(v)
-		case string:
-			fromInt, _ = strconv.Atoi(v)
-		}
-		switch v := toTime.(type) {
-		case float64:
-			toInt = int(v)
-		case string:
-			toInt, _ = strconv.Atoi(v)
-		}
-		f["time"] = map[string]any{
-			"$gte": fromInt,
-			"$lt":  toInt,
-		}
+	if req.FromTime != 0 && req.ToTime != 0 {
+		filter = append(filter, bson.E{Key: "time", Value: bson.D{
+			{Key: "$gte", Value: req.FromTime},
+			{Key: "$lt", Value: req.ToTime},
+		}})
 	}
 
 	// Handle tags
-	tagQueries := make(map[string]any)
-	if v, ok := filters["includeTags"]; ok {
-		switch vv := v.(type) {
-		case []any:
-			strs := []string{}
-			for _, elem := range vv {
-				strs = append(strs, fmt.Sprintf("%v", elem))
-			}
-			tagQueries["$all"] = strs
-		}
-	}
-	if v, ok := filters["excludeTags"]; ok {
-		switch vv := v.(type) {
-		case []any:
-			strs := []string{}
-			for _, elem := range vv {
-				strs = append(strs, fmt.Sprintf("%v", elem))
-			}
-			tagQueries["$nin"] = strs
-		}
-	}
-	if len(tagQueries) > 0 {
-		f["tags"] = tagQueries
+	tagQueries := bson.M{}
+
+	if len(req.IncludeTags) > 0 {
+		tagQueries["$all"] = req.IncludeTags
 	}
 
-	results, err := api.DB.GetFlowList(f)
+	if len(req.ExcludeTags) > 0 {
+		tagQueries["$nin"] = req.ExcludeTags
+	}
+
+	if len(tagQueries) > 0 {
+		filter = append(filter, bson.E{Key: "tags", Value: tagQueries})
+	}
+
+	type apiFlowEntry struct {
+		Id           primitive.ObjectID `json:"_id"`         // MongoDB unique identifier
+		SrcPort      int                `json:"src_port"`    // Source port
+		DstPort      int                `json:"dst_port"`    // Destination port
+		SrcIp        string             `json:"src_ip"`      // Source IP address
+		DstIp        string             `json:"dst_ip"`      // Destination IP address
+		Time         int                `json:"time"`        // Timestamp (epoch)
+		Duration     int                `json:"duration"`    // Duration in milliseconds
+		Num_packets  int                `json:"num_packets"` // Number of packets
+		Blocked      bool               `json:"blocked"`
+		Filename     string             `json:"filename"`  // Name of the pcap file this flow was captured in
+		ParentId     primitive.ObjectID `json:"parent_id"` // Parent flow ID if this is a child flow
+		ChildId      primitive.ObjectID `json:"child_id"`  // Child flow ID if this is a parent flow
+		Fingerprints []uint32           `json:"fingerprints"`
+		Signatures   []db.Signature     `json:"signatures"` // Signatures matched by this flow
+		Flow         []db.FlowItem      `json:"flow"`
+		Tags         []string           `json:"tags"`    // Tags associated with this flow, e.g. "starred", "tcp", "udp", "blocked"
+		Size         int                `json:"size"`    // Size of the flow in bytes
+		Flags        []string           `json:"flags"`   // Flags contained in the flow
+		Flagids      []string           `json:"flagids"` // Flag IDs associated with this flow
+	}
+
+	results, err := api.DB.GetFlowList(filter)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, results)
+
+	apiResults := make([]apiFlowEntry, len(results))
+	for i, flow := range results {
+		res := apiFlowEntry{
+			Id:           flow.Id,
+			SrcPort:      flow.SrcPort,
+			DstPort:      flow.DstPort,
+			SrcIp:        flow.SrcIp,
+			DstIp:        flow.DstIp,
+			Time:         flow.Time,
+			Duration:     flow.Duration,
+			Num_packets:  flow.Num_packets,
+			Blocked:      flow.Blocked,
+			Filename:     flow.Filename,
+			ParentId:     flow.ParentId,
+			ChildId:      flow.ChildId,
+			Fingerprints: flow.Fingerprints,
+			Flow:         flow.Flow,
+			Tags:         flow.Tags,
+			Size:         flow.Size,
+			Flags:        flow.Flags,
+			Flagids:      flow.Flagids,
+		}
+
+		res.Signatures = make([]db.Signature, 0, len(flow.Suricata))
+		for _, sigID := range flow.Suricata {
+			sig, err := api.DB.GetSignature(sigID)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			}
+			res.Signatures = append(res.Signatures, sig)
+		}
+
+		apiResults[i] = res
+	}
+
+	return c.JSON(http.StatusOK, apiResults)
 }
 
 func (api *API) getTags(c echo.Context) error {

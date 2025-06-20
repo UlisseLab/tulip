@@ -64,6 +64,10 @@ export function FlowList() {
   const from_filter = searchParams.get(START_FILTER_KEY) ?? undefined;
   const to_filter = searchParams.get(END_FILTER_KEY) ?? undefined;
 
+  // parse from_filter and to_filter as numbers
+  const from_filter_num = from_filter ? parseInt(from_filter, 10) : undefined;
+  const to_filter_num = to_filter ? parseInt(to_filter, 10) : undefined;
+
   const debounced_text_filter = useDebounce(text_filter, 300);
 
   const {
@@ -75,8 +79,8 @@ export function FlowList() {
       "flow.data": debounced_text_filter,
       dst_ip: service?.ip,
       dst_port: service?.port,
-      from_time: from_filter,
-      to_time: to_filter,
+      from_time: from_filter_num,
+      to_time: to_filter_num,
       service: "", // FIXME
       tags: filterTags,
       flags: filterFlags,
@@ -87,7 +91,7 @@ export function FlowList() {
     {
       refetchOnMountOrArgChange: true,
       pollingInterval: FLOW_LIST_REFETCH_INTERVAL_MS,
-    }
+    },
   );
 
   // TODO: fix the below transformation - move it to server
@@ -150,9 +154,9 @@ export function FlowList() {
     "j",
     () =>
       setFlowIndex((fi) =>
-        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1)
+        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1),
       ),
-    [transformedFlowData?.length]
+    [transformedFlowData?.length],
   );
   useHotkeys("k", () => setFlowIndex((fi) => Math.max(0, fi - 1)));
   useHotkeys(
@@ -163,7 +167,7 @@ export function FlowList() {
         dispatch(toggleFilterTag("flag-in"));
       }
     },
-    [availableTags]
+    [availableTags],
   );
   useHotkeys(
     "o",
@@ -173,7 +177,7 @@ export function FlowList() {
         dispatch(toggleFilterTag("flag-out"));
       }
     },
-    [availableTags]
+    [availableTags],
   );
   useHotkeys("r", () => refetch());
 
