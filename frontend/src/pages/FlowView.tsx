@@ -158,13 +158,21 @@ function PythonRequestFlow({
   full_flow: FullFlow;
   flow: FlowData;
 }) {
-  const { data } = useToSinglePythonRequestQuery({
+  const { data, error } = useToSinglePythonRequestQuery({
     body: flow.b64,
     id: full_flow._id,
     tokenize: true,
   });
 
-  return <FlowContainer copyText={data}>{data}</FlowContainer>;
+  return error ? (
+    <FlowContainer>
+      <span className="text-red-500">
+        Error generating Python request: {JSON.stringify(error)}
+      </span>
+    </FlowContainer>
+  ) : (
+    <FlowContainer copyText={data}>{data}</FlowContainer>
+  );
 }
 
 function detectType(flow: FlowData) {

@@ -278,20 +278,36 @@ func (api *API) getFlowDetail(c echo.Context) error {
 func (api *API) convertToSinglePythonRequest(c echo.Context) error {
 	type Request struct {
 		Tokenize   bool   `query:"tokenize"`
-		UseSession bool   `query:"use_requests_session"`
+		UseSession bool   `query:"use_requests_session,omitempty"`
 		Id         string `query:"id"`
 	}
 
-	var req Request
-	if err := c.Bind(&req); err != nil {
-		return c.String(http.StatusBadRequest, "Invalid request parameters")
+	var (
+		tokenize   = false
+		useSession = false
+		id         string
+		err        error
+	)
+
+	if param := c.QueryParam("tokenize"); param != "" {
+		tokenize, err = strconv.ParseBool(param)
+		if err != nil {
+			return c.String(http.StatusBadRequest, "Invalid 'tokenize' query parameter")
+		}
 	}
 
-	if req.Id == "" {
+	if param := c.QueryParam("use_requests_session"); param != "" {
+		useSession, err = strconv.ParseBool(param)
+		if err != nil {
+			return c.String(http.StatusBadRequest, "Invalid 'use_requests_session' query parameter")
+		}
+	}
+
+	if id = c.QueryParam("id"); id == "" {
 		return c.String(http.StatusBadRequest, "Query parameter 'id' is required")
 	}
 
-	flow, err := api.DB.GetFlowDetail(req.Id)
+	flow, err := api.DB.GetFlowDetail(id)
 	if err != nil || flow == nil {
 		return c.String(http.StatusBadRequest, "Invalid flow id")
 	}
@@ -305,7 +321,7 @@ func (api *API) convertToSinglePythonRequest(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "Could not decode base64 request body")
 	}
 
-	py, err := convertSingleHTTPRequest(raw, flow, req.Tokenize, req.UseSession)
+	py, err := convertSingleHTTPRequest(raw, flow, tokenize, useSession)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, fmt.Sprintf("There was an error while converting the request:\n%s: %s", err.Error(), err))
 	}
