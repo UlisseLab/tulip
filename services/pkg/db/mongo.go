@@ -590,6 +590,7 @@ type GetFlowsOptions struct {
 	SrcPort     int
 	SrcIp       string
 	Limit       int
+	Offset      int
 	FlowData    string // Optional data field to filter flows by
 }
 
@@ -604,6 +605,10 @@ func (db MongoDatabase) GetFlows(ctx context.Context, opts *GetFlowsOptions) ([]
 			findOpts.SetLimit(int64(opts.Limit))
 		} else {
 			findOpts.SetLimit(100) // Default limit if not specified
+		}
+
+		if opts.Offset > 0 {
+			findOpts.SetSkip(int64(opts.Offset))
 		}
 
 		timeQuery := bson.M{}

@@ -43,7 +43,6 @@ export interface Signature {
   action: string;
 }
 
-// TODO: pagination WTF
 export type FlowsQuery = {
   // Text filter
   "flow.data"?: string;
@@ -57,6 +56,8 @@ export type FlowsQuery = {
   tags: string[];
   flags: string[];
   flagids: string[];
+  limit?: number;
+  offset?: number;
 };
 
 export type Service = {

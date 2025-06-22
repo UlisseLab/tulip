@@ -26,6 +26,7 @@ import classNames from "classnames";
 import { Tag } from "./Tag";
 import {
   useGetFlowsQuery,
+  useLazyGetFlowsQuery,
   useGetServicesQuery,
   useGetTagsQuery,
   useStarFlowMutation,
@@ -38,6 +39,12 @@ export function FlowList() {
 
   // we add a local variable to prevent racing with the browser location API
   let openedFlowID = params.id;
+
+  // Infinite scroll state
+  const PAGE_SIZE = 50;
+  const [allFlows, setAllFlows] = useState<Flow[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const { data: availableTags } = useGetTagsQuery();
   const { data: services } = useGetServicesQuery();
@@ -111,38 +118,93 @@ export function FlowList() {
 
   const debounced_text_filter = useDebounce(text_filter, 300);
 
+  // Base query parameters
+  const baseQuery = {
+    "flow.data": debounced_text_filter,
+    dst_ip: service?.ip,
+    dst_port: service?.port,
+    from_time: from_filter_num,
+    to_time: to_filter_num,
+    service: service?.name ?? "",
+    tags: filterTags.include,
+    flags: filterFlags,
+    flagids: filterFlagids,
+    includeTags: filterTags.include,
+    excludeTags: filterTags.exclude,
+    limit: PAGE_SIZE,
+    offset: 0,
+  };
+
   const {
     data: flowData,
     isLoading,
     refetch,
   } = useGetFlowsQuery(
-    {
-      "flow.data": debounced_text_filter,
-      dst_ip: service?.ip,
-      dst_port: service?.port,
-      from_time: from_filter_num,
-      to_time: to_filter_num,
-      service: service?.name ?? "",
-      tags: filterTags.include,
-      flags: filterFlags,
-      flagids: filterFlagids,
-      includeTags: filterTags.include,
-      excludeTags: filterTags.exclude,
-    },
+    baseQuery,
     {
       refetchOnMountOrArgChange: true,
       pollingInterval: FLOW_LIST_REFETCH_INTERVAL_MS,
     },
   );
 
-  // TODO: fix the below transformation - move it to server
-  // Diederik gives you a beer once it has been fixed
-  const transformedFlowData = flowData?.map((flow) => ({
-    ...flow,
-    service_tag:
-      services?.find((s) => s.ip === flow.dst_ip && s.port === flow.dst_port)
-        ?.name ?? "unknown",
-  }));
+  // Load more flows function
+  const [getFlowsTrigger] = useLazyGetFlowsQuery();
+  
+  const loadMoreFlows = async () => {
+    if (isLoadingMore || !hasMore) return;
+    
+    setIsLoadingMore(true);
+    try {
+      const result = await getFlowsTrigger({
+        ...baseQuery,
+        offset: allFlows.length,
+      }).unwrap();
+      
+      if (result.length < PAGE_SIZE) {
+        setHasMore(false);
+      }
+      
+      // Transform new flows with service tags
+      const transformedNewFlows = result.map((flow) => ({
+        ...flow,
+        service_tag:
+          services?.find((s) => s.ip === flow.dst_ip && s.port === flow.dst_port)
+            ?.name ?? "unknown",
+      }));
+      
+      // Merge with existing flows, avoiding duplicates
+      const newFlows = transformedNewFlows.filter(newFlow => 
+        !allFlows.some(existingFlow => existingFlow._id === newFlow._id)
+      );
+      
+      setAllFlows(prev => [...prev, ...newFlows]);
+    } catch (error) {
+      console.error('Failed to load more flows:', error);
+      // Don't disable hasMore on error, allow retry
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Reset flows when filters change
+  useEffect(() => {
+    if (flowData) {
+      const transformed = flowData.map((flow) => ({
+        ...flow,
+        service_tag:
+          services?.find((s) => s.ip === flow.dst_ip && s.port === flow.dst_port)
+            ?.name ?? "unknown",
+      }));
+      setAllFlows(transformed);
+      setHasMore(flowData.length === PAGE_SIZE);
+    } else if (!isLoading) {
+      // Clear flows if no data and not loading
+      setAllFlows([]);
+      setHasMore(false);
+    }
+  }, [flowData, services, isLoading]);
+
+  const transformedFlowData = allFlows;
 
   const onHeartHandler = async (flow: Flow) => {
     await starFlow({ id: flow._id, star: !flow.tags.includes("starred") });
@@ -233,7 +295,37 @@ export function FlowList() {
   const handleManualRefresh = async () => {
     setManualLoading(true);
     try {
-      await refetch();
+      // Use lazy query to force a fresh request
+      const result = await getFlowsTrigger({
+        ...baseQuery,
+        offset: 0, // Always start from the beginning for refresh
+      }).unwrap();
+      
+      // Transform the data
+      const transformed = result.map((flow) => ({
+        ...flow,
+        service_tag:
+          services?.find((s) => s.ip === flow.dst_ip && s.port === flow.dst_port)
+            ?.name ?? "unknown",
+      }));
+      
+      // Replace all flows with fresh data
+      setAllFlows(transformed);
+      setHasMore(result.length === PAGE_SIZE);
+      
+      // Reset flow selection to first item and scroll to top
+      setFlowIndex(0);
+      virtuoso?.current?.scrollToIndex({
+        index: 0,
+        behavior: "auto",
+      });
+      
+      // Navigate to first flow if we have flows
+      if (transformed.length > 0) {
+        navigate(`/flow/${transformed[0]._id}?${searchParams}`);
+      }
+    } catch (error) {
+      console.error('Manual refresh failed:', error);
     } finally {
       setManualLoading(false);
     }
@@ -310,18 +402,14 @@ export function FlowList() {
       {isLoading && !manualLoading ? (
         <div className="flex flex-1 items-center justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mr-3"></div>
-          <span className="text-gray-500 dark:text-gray-300 text-lg">
-            Loading flows…
-          </span>
+          <span className="text-gray-500 dark:text-gray-300 text-lg">Loading flows…</span>
         </div>
       ) : (
         <div className="relative flex-1 flex flex-col">
           {manualLoading && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-100/80 dark:bg-gray-900/80">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mr-3"></div>
-              <span className="text-gray-500 dark:text-gray-300 text-lg">
-                Refreshing…
-              </span>
+              <span className="text-gray-500 dark:text-gray-300 text-lg">Refreshing…</span>
             </div>
           )}
           <Virtuoso
@@ -331,6 +419,11 @@ export function FlowList() {
             data={transformedFlowData}
             ref={virtuoso}
             initialTopMostItemIndex={flowIndex}
+            endReached={() => {
+              if (hasMore && !isLoadingMore && !isLoading) {
+                loadMoreFlows();
+              }
+            }}
             itemContent={(index, flow) => (
               <Link
                 to={`/flow/${flow._id}?${searchParams}`}
@@ -345,6 +438,26 @@ export function FlowList() {
                 />
               </Link>
             )}
+            components={{
+              Footer: () => {
+                if (isLoadingMore) {
+                  return (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500 mr-2"></div>
+                      <span className="text-gray-500 dark:text-gray-300">Loading more flows...</span>
+                    </div>
+                  );
+                }
+                if (!hasMore && transformedFlowData.length > 0) {
+                  return (
+                    <div className="flex items-center justify-center py-4">
+                      <span className="text-gray-500 dark:text-gray-300">No more flows to load</span>
+                    </div>
+                  );
+                }
+                return null;
+              },
+            }}
           />
         </div>
       )}
