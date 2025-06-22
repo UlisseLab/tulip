@@ -31,10 +31,8 @@ function ServiceSelection() {
     FILTER_KEY,
     "all",
     (value) => (value === "all" ? null : value),
-    (value) => (value === null ? "all" : value)
+    (value) => (value === null ? "all" : value),
   );
-
-  console.log("service", service);
 
   const onChangeService = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedService = event.target.value;
@@ -43,13 +41,17 @@ function ServiceSelection() {
 
   return (
     <select
-      className="w-20"
+      className="w-20 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
       title="Service"
       value={service}
       onChange={onChangeService}
     >
       {servicesList.map((service) => (
-        <option key={service.name} value={service.name}>
+        <option
+          key={service.name}
+          value={service.name}
+          className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100"
+        >
           {service.name}
         </option>
       ))}
@@ -84,7 +86,8 @@ function TextSearch() {
           }
           setSearchParams(searchParams);
         }}
-      ></input>
+        className="w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
+      />
     </div>
   );
 }
@@ -128,7 +131,7 @@ function useMessyTimeStuff() {
       return;
     }
     const tick = Math.floor(
-      (unixTimeInt - new Date(startDate).valueOf()) / tickLength
+      (unixTimeInt - new Date(startDate).valueOf()) / tickLength,
     );
 
     return tick;
@@ -171,7 +174,7 @@ function StartDateSelection() {
   return (
     <div>
       <input
-        className="w-20"
+        className="w-20 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
         id="startdateselection"
         type="number"
         placeholder="from"
@@ -179,7 +182,7 @@ function StartDateSelection() {
         onChange={(event) => {
           setTimeParam(event.target.value, START_FILTER_KEY);
         }}
-      ></input>
+      />
     </div>
   );
 }
@@ -190,7 +193,7 @@ function EndDateSelection() {
   return (
     <div>
       <input
-        className="w-20"
+        className="w-20 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
         id="enddateselection"
         type="number"
         placeholder="to"
@@ -198,7 +201,7 @@ function EndDateSelection() {
         onChange={(event) => {
           setTimeParam(event.target.value, END_FILTER_KEY);
         }}
-      ></input>
+      />
     </div>
   );
 }
@@ -210,7 +213,7 @@ function FirstDiff() {
     FIRST_DIFF_KEY,
     "",
     (value) => (value === "" ? null : value),
-    (value) => (value === null ? "" : value)
+    (value) => (value === null ? "" : value),
   );
 
   useHotkeys("f", () => {
@@ -224,7 +227,7 @@ function FirstDiff() {
   return (
     <input
       type="text"
-      className="md:w-72 cursor-pointer"
+      className="md:w-72 cursor-pointer border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
       placeholder="First Diff ID"
       readOnly
       value={firstDiffFlow}
@@ -234,7 +237,7 @@ function FirstDiff() {
         event.preventDefault();
         setFirstDiffFlow(null);
       }}
-    ></input>
+    />
   );
 }
 
@@ -245,7 +248,7 @@ function SecondDiff() {
     SECOND_DIFF_KEY,
     "",
     (value) => (value === "" ? null : value),
-    (value) => (value === null ? "" : value)
+    (value) => (value === null ? "" : value),
   );
 
   useHotkeys("g", () => {
@@ -255,7 +258,7 @@ function SecondDiff() {
   return (
     <input
       type="text"
-      className="md:w-72 cursor-pointer"
+      className="md:w-72 cursor-pointer border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
       placeholder="Second Flow ID"
       title="Click to set second diff flow, right click to clear"
       readOnly
@@ -265,7 +268,7 @@ function SecondDiff() {
         e.preventDefault();
         setSecondDiffFlow(null);
       }}
-    ></input>
+    />
   );
 }
 
@@ -282,7 +285,7 @@ function Diff() {
   return (
     <button
       type="button"
-      className=" bg-amber-100 text-gray-800 rounded-md px-2 py-1"
+      className="bg-amber-100 dark:bg-amber-900 text-gray-800 dark:text-gray-100 rounded-md border border-amber-300 dark:border-amber-800 px-2 py-1 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
       onClick={navigateToDiff}
     >
       Diff
@@ -290,7 +293,6 @@ function Diff() {
   );
 }
 
-import ulisseImg from "../../assets/Logo_60.png";
 import { useSearchParam } from "../store/param";
 import type { Service } from "../types";
 
@@ -311,14 +313,7 @@ export function Header() {
   return (
     <>
       <Link to={`/?${searchParams}`}>
-        <div className="header-icon">
-          🌷+
-          <img
-            src={ulisseImg}
-            alt="Ulisse"
-            className="w-7 pb-1 inline-block ml-1"
-          />
-        </div>
+        <div className="header-icon">🌷</div>
       </Link>
       <div>
         <TextSearch></TextSearch>
@@ -337,18 +332,19 @@ export function Header() {
       <div>
         <button
           type="button"
-          className="bg-amber-100 text-gray-800 rounded-md px-2 py-1 text-center text-sm cursor-pointer hover:bg-amber-200"
+          className="bg-amber-100 dark:bg-amber-900 text-gray-800 dark:text-gray-100 rounded-md border border-amber-300 dark:border-amber-800 px-2 py-1 text-center cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-800 transition-colors"
           onClick={() => setToLastnTicks(5)}
         >
           Last 5 ticks
         </button>
       </div>
       <Link to={`/corrie?${searchParams}`}>
-        <div className="bg-blue-100 text-gray-800 rounded-md px-2 py-1 text-center text-sm hover:bg-blue-200 cursor-pointer">
+        <div className="bg-blue-100 dark:bg-blue-900 text-gray-800 dark:text-gray-100 rounded-md border border-blue-300 dark:border-blue-800 px-2 py-1 text-center hover:bg-blue-200 dark:hover:bg-blue-800 cursor-pointer transition-colors">
           Graph view
         </div>
       </Link>
-      <div className="ml-auto mr-4 flex">
+
+      <div className="ml-auto mr-4 flex items-center">
         <div className="mr-4">
           <FirstDiff />
         </div>
@@ -360,8 +356,10 @@ export function Header() {
             <Diff />
           </Suspense>
         </div>
-        <div className="ml-auto flex justify-center align-center flex-col">
-          Current: {currentTick}
+        <div className="ml-auto flex justify-center items-center flex-col">
+          <span className="inline-block bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100 text-xs font-semibold px-3 py-1 rounded-full border border-blue-300 dark:border-blue-700">
+            Tick: {currentTick}
+          </span>
         </div>
       </div>
     </>

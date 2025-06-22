@@ -756,6 +756,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fontsource-variable/jetbrains-mono@npm:^5.2.6":
+  version: 5.2.6
+  resolution: "@fontsource-variable/jetbrains-mono@npm:5.2.6"
+  checksum: 10c0/c5dfb97e26feca25535ce5bd57c6e85429608987adbeafa77ac01f2c9b11d5ee76fbdb26d99afe997e4286f74fe699be4e3460d177d95db2c01a8f46a20de443
+  languageName: node
+  linkType: hard
+
 "@fontsource-variable/recursive@npm:^5.2.6":
   version: 5.2.6
   resolution: "@fontsource-variable/recursive@npm:5.2.6"
@@ -2869,6 +2876,7 @@ __metadata:
   resolution: "frontend@workspace:."
   dependencies:
     "@eslint-react/eslint-plugin": "npm:^1.52.2"
+    "@fontsource-variable/jetbrains-mono": "npm:^5.2.6"
     "@fontsource-variable/recursive": "npm:^5.2.6"
     "@heroicons/react": "npm:^2.2.0"
     "@reduxjs/toolkit": "npm:^2.8.2"

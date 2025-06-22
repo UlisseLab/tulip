@@ -4,7 +4,7 @@ import Color from "color";
 const computeColorFromString = (str: string) => {
   const hue = Array.from(str).reduce(
     (hash, char) => 0 | (31 * hash + char.charCodeAt(0)),
-    0
+    0,
   );
   return Color(`hsl(${hue}, 100%, 50%)`).hex();
 };
@@ -34,13 +34,12 @@ export const Tag = ({
   excluded = false,
   onClick,
 }: TagProps) => {
-  let tagBackgroundColor = disabled ? "#eee" : color ?? tagToColor(tag);
-
+  let tagBackgroundColor = disabled ? undefined : (color ?? tagToColor(tag));
   let tagTextColor = disabled
-    ? "#bbb"
-    : Color(tagBackgroundColor).isDark()
-    ? "#fff"
-    : "#000";
+    ? undefined
+    : Color(tagBackgroundColor ?? "#eee").isDark()
+      ? "#fff"
+      : "#000";
 
   if (excluded) {
     tagTextColor = "white";
@@ -51,10 +50,11 @@ export const Tag = ({
     <div
       onClick={onClick}
       className={classNames(
-        "p-3 cursor-pointer rounded-md uppercase text-xs h-5 text-center flex items-center hover:opacity-90 transition-colors duration-250 text-ellipsis overflow-hidden whitespace-nowrap",
+        "p-3 cursor-pointer rounded-md uppercase text-xs h-5 text-center flex items-center hover:opacity-90 transition-colors duration-250 text-ellipsis overflow-hidden whitespace-nowrap border",
         {
-          "bg-gray-300": disabled,
-        }
+          "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-300 border-gray-400 dark:border-gray-600": disabled,
+          "border-black dark:border-white": excluded,
+        },
       )}
       style={{
         backgroundColor: tagBackgroundColor,

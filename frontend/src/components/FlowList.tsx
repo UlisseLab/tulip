@@ -59,7 +59,7 @@ export function FlowList() {
       }
       return JSON.stringify(value);
     },
-    (value) => JSON.parse(value) as FilterTags
+    (value) => JSON.parse(value) as FilterTags,
   );
 
   const onTagClick = (tag: string) => {
@@ -96,7 +96,7 @@ export function FlowList() {
     SERVICE_FILTER_KEY,
     "",
     (value) => value,
-    (value) => value
+    (value) => value,
   );
 
   const service = services?.find((s) => s.name == serviceName);
@@ -132,7 +132,7 @@ export function FlowList() {
     {
       refetchOnMountOrArgChange: true,
       pollingInterval: FLOW_LIST_REFETCH_INTERVAL_MS,
-    }
+    },
   );
 
   // TODO: fix the below transformation - move it to server
@@ -196,9 +196,9 @@ export function FlowList() {
     "j",
     () =>
       setFlowIndex((fi) =>
-        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1)
+        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1),
       ),
-    [transformedFlowData?.length]
+    [transformedFlowData?.length],
   );
 
   useHotkeys("k", () => setFlowIndex((fi) => Math.max(0, fi - 1)));
@@ -211,7 +211,7 @@ export function FlowList() {
         dispatch(toggleFilterTag("flag-in"));
       }
     },
-    [availableTags]
+    [availableTags],
   );
 
   useHotkeys(
@@ -222,32 +222,65 @@ export function FlowList() {
         dispatch(toggleFilterTag("flag-out"));
       }
     },
-    [availableTags]
+    [availableTags],
   );
   useHotkeys("r", () => refetch());
 
   const [showFilters, setShowFilters] = useState(false);
+  const [manualLoading, setManualLoading] = useState(false);
+
+  // Wrap refetch to show loading indicator immediately
+  const handleManualRefresh = async () => {
+    setManualLoading(true);
+    try {
+      await refetch();
+    } finally {
+      setManualLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
-      <div className="bg-white border-b-gray-300 border-b shadow-md flex flex-col">
-        <button
-          type="button"
-          className="flex justify-center gap-1 h-12 w-full items-center text-sm cursor-pointer hover:bg-gray-100 "
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          {
-            <AdjustmentsHorizontalIcon
-              height={20}
-              className="text-gray-400"
-            ></AdjustmentsHorizontalIcon>
-          }
-          {showFilters ? "Close" : "Open"} filters
-        </button>
+      <div
+        className={classNames(
+          "border-b shadow-md flex flex-col",
+          "bg-white border-b-gray-300 text-gray-700",
+          "dark:bg-gray-800 dark:text-white dark:border-gray-700",
+        )}
+      >
+        <div className="flex flex-row items-center gap-0 p-2">
+          <div className="inline-flex rounded-md shadow-sm border border-gray-300 dark:border-gray-700 overflow-hidden">
+            <button
+              type="button"
+              className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-3 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors border-r border-gray-300 dark:border-gray-700 flex items-center gap-2"
+              onClick={handleManualRefresh}
+              title="Refresh flows"
+              style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+              disabled={manualLoading}
+            >
+              {manualLoading ? (
+                <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></span>
+              ) : null}
+              Refresh
+            </button>
+            <button
+              type="button"
+              className="flex justify-center gap-1 items-center bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-3 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
+              onClick={() => setShowFilters(!showFilters)}
+              style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+            >
+              <AdjustmentsHorizontalIcon
+                height={20}
+                className="text-gray-400 dark:text-gray-300"
+              />
+              {showFilters ? "Close" : "Open"} filters
+            </button>
+          </div>
+        </div>
 
         {showFilters && (
-          <div className="border-t-gray-300 border-t p-2 transition-all duration-300">
-            <p className="text-sm font-bold text-gray-600 pb-2">
+          <div className="border-t-gray-300 dark:border-t-gray-700 border-t p-2 transition-all duration-300">
+            <p className="text-sm font-bold text-gray-600 pb-2 dark:text-gray-300">
               Intersection filter
             </p>
             <div className="flex gap-2 flex-wrap">
@@ -268,28 +301,47 @@ export function FlowList() {
         )}
       </div>
       <div></div>
-      <Virtuoso
-        className={classNames(["flex", "flex-col", "flex-1"], {
-          "sidebar-loading": isLoading,
-        })}
-        data={transformedFlowData}
-        ref={virtuoso}
-        initialTopMostItemIndex={flowIndex}
-        itemContent={(index, flow) => (
-          <Link
-            to={`/flow/${flow._id}?${searchParams}`}
-            onClick={() => setFlowIndex(index)}
-            key={flow._id}
-          >
-            <FlowListEntry
-              key={flow._id}
-              flow={flow}
-              isActive={flow._id === openedFlowID}
-              onHeartClick={onHeartHandler}
-            />
-          </Link>
-        )}
-      />
+      {isLoading && !manualLoading ? (
+        <div className="flex flex-1 items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mr-3"></div>
+          <span className="text-gray-500 dark:text-gray-300 text-lg">
+            Loading flows…
+          </span>
+        </div>
+      ) : (
+        <div className="relative flex-1 flex flex-col">
+          {manualLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-100/80 dark:bg-gray-900/80">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mr-3"></div>
+              <span className="text-gray-500 dark:text-gray-300 text-lg">
+                Refreshing…
+              </span>
+            </div>
+          )}
+          <Virtuoso
+            className={classNames(["flex", "flex-col", "flex-1"], {
+              "sidebar-loading": isLoading,
+            })}
+            data={transformedFlowData}
+            ref={virtuoso}
+            initialTopMostItemIndex={flowIndex}
+            itemContent={(index, flow) => (
+              <Link
+                to={`/flow/${flow._id}?${searchParams}`}
+                onClick={() => setFlowIndex(index)}
+                key={flow._id}
+              >
+                <FlowListEntry
+                  key={flow._id}
+                  flow={flow}
+                  isActive={flow._id === openedFlowID}
+                  onHeartClick={onHeartHandler}
+                />
+              </Link>
+            )}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -311,8 +363,10 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
   return (
     <li
       className={classNames({
-        "bg-gray-100 p-2 focus:ring-4 border-t border-gray-200 list-none": true,
-        "border-y border-l-4 border-gray-500 bg-gray-300/50": isActive,
+        "bg-gray-100 dark:bg-gray-800 p-2 focus:ring-4 border-t border-gray-200 dark:border-gray-700 list-none":
+          true,
+        "border-y border-l-4 border-gray-500 dark:border-gray-400 bg-gray-300/50 dark:bg-gray-700/50":
+          isActive,
       })}
     >
       <div className="flex">
@@ -323,42 +377,49 @@ function FlowListEntry({ flow, isActive, onHeartClick }: FlowListEntryProps) {
           }}
         >
           {isStarred ? (
-            <HeartIcon className="text-red-500" />
+            <HeartIcon className="text-red-500 dark:text-red-400" />
           ) : (
-            <EmptyHeartIcon />
+            <EmptyHeartIcon className="dark:text-gray-300" />
           )}
         </div>
 
         <div className="w-5 mr-2 self-center shrink-0">
           {flow.child_id != "000000000000000000000000" ||
           flow.parent_id != "000000000000000000000000" ? (
-            <LinkIcon className="text-blue-500" />
+            <LinkIcon className="text-blue-500 dark:text-blue-400" />
           ) : undefined}
         </div>
         <div className="flex-1 shrink ">
           <div className="flex">
             <div className="shrink-0">
               →{" "}
-              <span className="text-gray-700 font-bold text-ellipsis overflow-hidden">
+              <span className="text-gray-700 dark:text-gray-100 font-bold text-ellipsis overflow-hidden">
                 {flow.service_tag}
               </span>
-              <span className="text-gray-500"> (:{flow.dst_port})</span>
+              <span className="text-gray-500 dark:text-gray-400">
+                {" "}
+                (:{flow.dst_port})
+              </span>
             </div>
 
             <div className="ml-2">
-              <span className="text-gray-500">{formatted_time_h_m_s}</span>
-              <span className="text-gray-300">{formatted_time_ms}</span>
+              <span className="text-gray-500 dark:text-gray-400">
+                {formatted_time_h_m_s}
+              </span>
+              <span className="text-gray-300 dark:text-gray-500">
+                {formatted_time_ms}
+              </span>
             </div>
-            <div className="text-gray-500 ml-auto text-sm">
+            <div className="text-gray-500 dark:text-gray-400 ml-auto text-sm">
               {flow.duration > 10000 ? (
-                <div className="text-red-500">&gt;10s</div>
+                <div className="text-red-500 dark:text-red-400">&gt;10s</div>
               ) : (
                 <div>{flow.duration}ms</div>
               )}
             </div>
           </div>
 
-          <hr className="border-gray-200 my-2" />
+          <hr className="border-gray-200 dark:border-gray-700 my-2" />
           <div className="flex gap-2 flex-wrap">
             {filteredTagList.map((tag) => (
               <Tag key={tag} tag={tag}></Tag>

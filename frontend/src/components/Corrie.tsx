@@ -1,5 +1,5 @@
 import { useSearchParams, useNavigate } from "react-router";
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import type { Flow } from "../types";
 import {
   SERVICE_FILTER_KEY,
@@ -22,6 +22,35 @@ interface GraphProps {
   searchParams: URLSearchParams;
   setSearchParams: (a: URLSearchParams) => void;
   onClickNavigate: (a: string) => void;
+}
+
+// DeferredChart: delays rendering of children until browser is idle
+function DeferredChart({ children }: { children: React.ReactNode }) {
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    let handle: number;
+    if (window.requestIdleCallback) {
+      handle = window.requestIdleCallback(() => setShouldRender(true));
+      return () =>
+        window.cancelIdleCallback && window.cancelIdleCallback(handle);
+    } else {
+      handle = setTimeout(() => setShouldRender(true), 1);
+      return () => clearTimeout(handle);
+    }
+  }, []);
+
+  if (!shouldRender) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[300px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mr-3"></div>
+        <span className="text-gray-500 dark:text-gray-300 text-lg">
+          Rendering graph…
+        </span>
+      </div>
+    );
+  }
+  return <>{children}</>;
 }
 
 export function Corrie() {
@@ -47,7 +76,7 @@ export function Corrie() {
 
   const debounced_text_filter = useDebounce(text_filter, 300);
 
-  const { data: flowData } = useGetFlowsQuery(
+  const { data: flowData, isLoading } = useGetFlowsQuery(
     {
       "flow.data": debounced_text_filter,
       dst_ip: service?.ip,
@@ -82,8 +111,9 @@ export function Corrie() {
     setSearchParams(searchParams);
   };
 
-  const inactiveButtonClass = "bg-blue-100 text-gray-800 rounded-md px-2 py-1";
-  const activeButtonClass = `${inactiveButtonClass} ring-2 ring-gray-500`;
+  const inactiveButtonClass =
+    "bg-blue-100 dark:bg-blue-900 text-gray-800 dark:text-gray-100 rounded-md px-2 py-1 border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors";
+  const activeButtonClass = `${inactiveButtonClass} ring-2 ring-blue-400 dark:ring-blue-300`;
 
   const navigate = useNavigate();
   const onClickNavigate = useCallback(
@@ -101,16 +131,18 @@ export function Corrie() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="text-sm bg-white border-b-gray-300 border-b shadow-md flex flex-col">
+      <div className="text-sm bg-white dark:bg-gray-900 border-b-gray-300 dark:border-b-gray-700 border-b shadow-md flex flex-col">
         <div className="p-2 flex space-x-2" style={{ height: 50 }}>
           <a className="text-center px-2 py-2">Correlation mode: </a>
           <button
+            type="button"
             className={mode == "time" ? activeButtonClass : inactiveButtonClass}
             onClick={() => setCorrelationMode("time")}
           >
             time
           </button>
           <button
+            type="button"
             className={
               mode == "packets" ? activeButtonClass : inactiveButtonClass
             }
@@ -119,6 +151,7 @@ export function Corrie() {
             packets
           </button>
           <button
+            type="button"
             className={
               mode == "volume" ? activeButtonClass : inactiveButtonClass
             }
@@ -128,9 +161,34 @@ export function Corrie() {
           </button>
         </div>
       </div>
-      <div className="flex-1 w-full overflow-hidden p-4">
-        {(mode == "packets" || mode == "time") && TimePacketGraph(graphProps)}
-        {mode == "volume" && VolumeGraph(graphProps)}
+      <div className="flex-1 w-full h-full overflow-hidden relative flex bg-white dark:bg-gray-900">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-100/80 dark:bg-gray-900/80">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mr-3"></div>
+            <span className="text-gray-500 dark:text-gray-300 text-lg">
+              Loading graph…
+            </span>
+          </div>
+        )}
+        <div
+          className={
+            isLoading
+              ? "opacity-50 pointer-events-none flex-1 h-full"
+              : "flex-1 h-full"
+          }
+        >
+          <DeferredChart
+            key={
+              mode +
+              "-" +
+              (graphProps.flowList.length ? graphProps.flowList[0]._id : "")
+            }
+          >
+            {(mode == "packets" || mode == "time") &&
+              TimePacketGraph(graphProps)}
+            {mode == "volume" && VolumeGraph(graphProps)}
+          </DeferredChart>
+        </div>
       </div>
     </div>
   );

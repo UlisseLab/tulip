@@ -4,7 +4,10 @@ import { useHotkeys } from "react-hotkeys-hook";
 
 // @ts-expect-error - we should fix type declarations
 import "@fontsource-variable/recursive";
-import "./styles.css"
+// @ts-expect-error - we should fix type declarations
+import "@fontsource-variable/jetbrains-mono";
+
+import "./styles.css";
 
 import { Header } from "./components/Header";
 import { Home } from "./pages/Home";
@@ -60,9 +63,7 @@ function Layout() {
   return (
     <div className="grid-container">
       <header className="header-area">
-        <div className="header">
-          <Header></Header>
-        </div>
+        <Header></Header>
       </header>
       <aside className="flow-list-area">
         <Suspense>
