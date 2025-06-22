@@ -299,7 +299,7 @@ export function DiffView() {
 
   return (
     <div className="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
-      <div className="sticky shadow-md bg-white dark:bg-gray-900 overflow-auto py-1 border-y border-gray-300 dark:border-gray-700 flex items-center gap-2">
+      <div className="sticky shadow-md bg-white dark:bg-gray-900 overflow-auto py-1 border-y border-gray-300 dark:border-gray-700 flex items-center gap-2 px-4">
         <RadioGroup
           options={displayOptions}
           value={displayOption}

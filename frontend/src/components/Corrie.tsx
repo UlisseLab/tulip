@@ -29,13 +29,14 @@ function DeferredChart({ children }: { children: React.ReactNode }) {
   const [shouldRender, setShouldRender] = useState(false);
 
   useEffect(() => {
-    let handle: number;
     if (window.requestIdleCallback) {
-      handle = window.requestIdleCallback(() => setShouldRender(true));
+      // Use requestIdleCallback if available for better performance
+      const handle = window.requestIdleCallback(() => setShouldRender(true));
       return () =>
         window.cancelIdleCallback && window.cancelIdleCallback(handle);
     } else {
-      handle = setTimeout(() => setShouldRender(true), 1);
+      // Fallback to setTimeout if requestIdleCallback is not available
+      const handle = setTimeout(() => setShouldRender(true), 1);
       return () => clearTimeout(handle);
     }
   }, []);

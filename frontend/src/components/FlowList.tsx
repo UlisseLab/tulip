@@ -248,15 +248,19 @@ export function FlowList() {
           "dark:bg-gray-800 dark:text-white dark:border-gray-700",
         )}
       >
-        <div className="flex flex-row items-center gap-0 p-2">
-          <div className="inline-flex rounded-md shadow-sm border border-gray-300 dark:border-gray-700 overflow-hidden">
+        <div className="flex flex-row items-center p-0 m-0 w-full">
+          <div className="flex w-full h-10">
             <button
               type="button"
-              className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-3 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors border-r border-gray-300 dark:border-gray-700 flex items-center gap-2"
+              className={classNames(
+                "flex-1 border border-gray-300 dark:border-gray-700 text-sm transition-colors cursor-pointer",
+                "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-blue-200 dark:hover:bg-blue-900 flex items-center justify-center gap-2",
+                { "opacity-70": manualLoading },
+              )}
               onClick={handleManualRefresh}
               title="Refresh flows"
-              style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
               disabled={manualLoading}
+              style={{ margin: 0, borderRight: "none" }}
             >
               {manualLoading ? (
                 <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></span>
@@ -265,9 +269,11 @@ export function FlowList() {
             </button>
             <button
               type="button"
-              className="flex justify-center gap-1 items-center bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 px-3 py-1 text-sm cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-colors"
+              className={classNames(
+                "flex-1 border border-gray-300 dark:border-gray-700 text-sm transition-colors cursor-pointer",
+                "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-blue-200 dark:hover:bg-blue-900 flex items-center justify-center gap-2",
+              )}
               onClick={() => setShowFilters(!showFilters)}
-              style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
             >
               <AdjustmentsHorizontalIcon
                 height={20}
