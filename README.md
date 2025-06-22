@@ -19,6 +19,29 @@ Tulip is a flow analyzer meant for use during Attack / Defence CTF competitions.
 
 It allows players to easily find some traffic related to their service and automatically generates python snippets to replicate attacks.
 
+## Model Context Protocol
+
+Tulip natively supports the Model Context Protocol HTTP Streaming mode.
+
+If your client does not support it, you can use the `mcp-proxy` service to convert the Model Context Protocol to a regular HTTP stream.
+
+```sh
+uv tool install mcp-proxy
+```
+
+and then configure your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "mcp-proxy": {
+      "command": "mcp-proxy",
+      "args": ["--transport=streamablehttp", "http://localhost:8080/mcp"]
+    }
+  }
+}
+```
+
 ## Origins
 
 Tulip was developed by Team Europe for use in the first International Cyber Security Challenge. This is the official fork of the Ulisse CTF Team.

@@ -16,15 +16,10 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func main() {
-
-	config, err := LoadConfig()
-	if err != nil {
-		slog.Error("Error loading configuration", slog.Any("err", err))
-		return
-	}
 
 	// Setup logging (tint handler, assembler style)
 	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
@@ -32,6 +27,14 @@ func main() {
 		TimeFormat: "2006-01-02 15:04:05",
 	}))
 	slog.SetDefault(logger)
+
+	config, err := LoadConfig()
+	if err != nil {
+		slog.Error("Error loading configuration", slog.Any("err", err))
+		return
+	}
+
+
 
 	// Initialize MongoDB connection using pkg/db
 	mongoURI := config.MongoServer()
@@ -68,42 +71,83 @@ func main() {
 	}
 }
 
+func strToClientServer(str string) string {
+	switch str {
+	case "c":
+		return "Client to Server"
+	case "s":
+		return "Server to Client"
+	default:
+		return "Unknown Direction"
+	}
+}
+
 func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
-	// Add tools to the MCP server
+
+	// List Tags Tool
 	mcpServ.AddTool(
 		mcp.NewTool(
-			"getLast10Flows",
-			mcp.WithDescription("Fetch the last 10 flows"),
+			"listTags",
+			mcp.WithDescription("List all unique tags used in flows"),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			flows, err := database.GetLastFlows(ctx, 10)
+			tags, err := database.GetTagList()
 			if err != nil {
-				return nil, fmt.Errorf("failed to fetch flows: %v", err)
+				return nil, fmt.Errorf("failed to list tags: %v", err)
 			}
+			return mcp.NewToolResultText(fmt.Sprintf("Tags: %s", strings.Join(tags, ", "))), nil
+		},
+	)
 
-			slog.Debug("fetched %d flows from the database", "flows", len(flows))
-
-			content := bytes.NewBufferString("Last 10 Flows:\n")
-			for _, flow := range flows {
-				// Format the content for each flow
-				fmt.Fprintf(content, "- Flow Details: \n")
-				fmt.Fprintf(content, "\tFlow ID: %s\n", flow.Id)
-				fmt.Fprintf(content, "\tTimestamp: %d\n", flow.Time)
-				fmt.Fprintf(content, "\tSource: %s:%d\n", flow.SrcIp, flow.SrcPort)
-				fmt.Fprintf(content, "\tDestination: %s:%d\n", flow.DstIp, flow.DstPort)
-				fmt.Fprintf(content, "\tFound flags: %s\n", flow.Flags)
-				fmt.Fprintf(content, "\tTags: %s\n", flow.Tags)
+	// Flow Count Tool
+	mcpServ.AddTool(
+		mcp.NewTool(
+			"flowCount",
+			mcp.WithDescription("Count the number of flows matching optional criteria"),
+			mcp.WithString("src_ip", mcp.Description("Source IP address to filter flows")),
+			mcp.WithString("dst_ip", mcp.Description("Destination IP address to filter flows")),
+			mcp.WithNumber("src_port", mcp.Description("Source port to filter flows")),
+			mcp.WithNumber("dst_port", mcp.Description("Destination port to filter flows")),
+			mcp.WithArray("tags", mcp.Description("Tags to filter flows"), mcp.Items(map[string]any{"type": "string"})),
+			mcp.WithString("start_time", mcp.Description("Start time to filter flows (RFC3339 format)")),
+			mcp.WithString("end_time", mcp.Description("End time to filter flows (RFC3339 format)")),
+		),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			// Build filters similar to GetFlowList
+			filters := bson.D{}
+			if v := request.GetString("src_ip", ""); v != "" {
+				filters = append(filters, bson.E{Key: "src_ip", Value: v})
 			}
+			if v := request.GetString("dst_ip", ""); v != "" {
+				filters = append(filters, bson.E{Key: "dst_ip", Value: v})
+			}
+			if v := request.GetInt("src_port", 0); v != 0 {
+				filters = append(filters, bson.E{Key: "src_port", Value: v})
+			}
+			if v := request.GetInt("dst_port", 0); v != 0 {
+				filters = append(filters, bson.E{Key: "dst_port", Value: v})
+			}
+			if tags := request.GetStringSlice("tags", []string{}); len(tags) > 0 {
+				filters = append(filters, bson.E{Key: "tags", Value: map[string]any{"$all": tags}})
+			}
+			// Optionally add time range filtering if your schema supports it
 
-			// Return the result
-			return mcp.NewToolResultText(content.String()), nil
+			count, err := database.CountFlows(filters)
+			if err != nil {
+				return nil, fmt.Errorf("failed to count flows: %v", err)
+			}
+			return mcp.NewToolResultText(fmt.Sprintf("Total flows: %d", count)), nil
 		},
 	)
 
 	mcpServ.AddTool(
 		mcp.NewTool(
 			"getFlows",
-			mcp.WithDescription("Fetch flows based on criteria"),
+
+			mcp.WithTitleAnnotation("Get Flows"),
+			mcp.WithDescription("Fetch flows based on criteria, including source/destination IPs, "+
+				"ports, tags, and time range"),
+
 			mcp.WithNumber("limit", mcp.Required(), mcp.Description("Number of flows to fetch")),
 			mcp.WithString("src_ip", mcp.Description("Source IP address to filter flows")),
 			mcp.WithString("dst_ip", mcp.Description("Destination IP address to filter flows")),
@@ -112,9 +156,9 @@ func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 			mcp.WithArray("tags", mcp.Description("Tags to filter flows"), mcp.Items(map[string]any{"type": "number"})),
 			mcp.WithString("start_time", mcp.Description("Start time to filter flows (RFC3339 format)")),
 			mcp.WithString("end_time", mcp.Description("End time to filter flows (RFC3339 format)")),
+			mcp.WithString("flow_data", mcp.Description("Flow data to filter flows, you can insert any string you want to search for in the flow data")),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			var err error
 			opts := &db.GetFlowsOptions{}
 
 			// Parse the request parameters
@@ -138,7 +182,10 @@ func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 				return nil, fmt.Errorf("failed to fetch flows: %v", err)
 			}
 
-			content := bytes.NewBufferString("Flows:\n")
+			content := bytes.NewBufferString("")
+			fmt.Fprintf(content, "\nTotal flows found: %d\n", len(flows))
+
+			fmt.Fprintf(content, "Flows:\n")
 			for _, flow := range flows {
 
 				fmt.Fprintf(content, "\tFlow ID: %s\n", flow.Id)
@@ -150,20 +197,12 @@ func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 
 			}
 
+			fmt.Fprintf(content, "\nYou can use the `getFlow` tool to fetch more details and all the "+
+				"captured messages for a specific flow by its ID.\n")
+
 			return mcp.NewToolResultText(content.String()), nil
 		},
 	)
-
-	strToClientServer := func(str string) string {
-		switch str {
-		case "c":
-			return "Client to Server"
-		case "s":
-			return "Server to Client"
-		default:
-			return "Unknown Direction"
-		}
-	}
 
 	mcpServ.AddTool(
 		mcp.NewTool(
