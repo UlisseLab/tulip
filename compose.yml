@@ -28,6 +28,7 @@ services:
     restart: unless-stopped
     depends_on:
       - mongo
+
     volumes:
       - ${TRAFFIC_DIR}:/traffic:ro
     environment:

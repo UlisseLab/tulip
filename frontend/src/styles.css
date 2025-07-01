@@ -1,10 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --default-font-family: "Recursive Variable", sans-serif;
+  --font-mono: "JetBrains Mono Variable", monospace;
+}
+
+body {
+  @apply dark:bg-gray-900 dark:text-gray-200;
+}
+
 /* Grid */
 .grid-container {
   display: grid;
   grid-template-columns: 400px 1fr;
   grid-template-rows: 50px calc(100vh - 50px);
-  grid-column-gap: 0px;
-  grid-row-gap: 0px;
+  column-gap: 0;
+  row-gap: 0;
 }
 
 .flow-list-area {
@@ -20,26 +31,18 @@
 }
 
 .header-area {
+  @apply flex items-center gap-4;
+  @apply bg-white dark:bg-gray-800;
+
   grid-area: 1 / 1 / 2 / 3;
   border-bottom: 1px solid rgba(0, 0, 0, 0.2);
-}
 
-/* no need for footer
-.footer-area {
-  grid-area: 3 / 1 / 4 / 3;
-}*/
-
-/* Header */
-
-.header {
-  display: flex;
-  align-items: center;
   height: 50px;
-  @apply gap-3;
 
   input,
   select {
     @apply flex bg-gray-200 py-1 px-3 rounded-md;
+    @apply dark:bg-gray-700 dark:text-gray-200;
   }
 
   .header-icon {

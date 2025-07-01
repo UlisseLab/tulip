@@ -38,6 +38,8 @@ export const tulipApi = createApi({
             query.includeTags.length > 0 ? query.includeTags : undefined,
           excludeTags:
             query.excludeTags.length > 0 ? query.excludeTags : undefined,
+          limit: query.limit || 50,
+          offset: query.offset || 0,
         }),
       }),
     }),

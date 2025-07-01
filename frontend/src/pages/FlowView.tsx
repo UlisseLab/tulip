@@ -1,4 +1,4 @@
-import { useSearchParams, useParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useParams, useNavigate } from "react-router";
 import React, { useEffect, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import type { FlowData, FullFlow } from "../types";
@@ -9,12 +9,10 @@ import {
   API_BASE_PATH,
 } from "../const";
 import {
-  ArrowCircleLeftIcon,
-  ArrowCircleRightIcon,
-  ArrowCircleUpIcon,
-  ArrowCircleDownIcon,
-  DownloadIcon,
-} from "@heroicons/react/solid";
+  ArrowLeftCircleIcon,
+  ArrowRightCircleIcon,
+  ArrowDownTrayIcon,
+} from "@heroicons/react/24/solid";
 import { format } from "date-fns";
 
 import { hexy } from "hexy";
@@ -31,22 +29,30 @@ import escapeStringRegexp from "escape-string-regexp";
 
 const SECONDARY_NAVBAR_HEIGHT = 50;
 
+function openInCyberChef(b64: string) {
+  return window.open(
+    "https://gchq.github.io/CyberChef/#input=" + encodeURIComponent(b64),
+  );
+}
+
 function CopyButton({ copyText }: { copyText?: string }) {
-  const { statusText, copy } = useCopy({
+  const { copy } = useCopy({
     getText: async () => copyText ?? "",
   });
+
+  if (copyText == null || copyText === "") {
+    return <></>;
+  }
+
   return (
-    <>
-      {copyText && (
-        <button
-          className="p-2 text-sm text-blue-500"
-          onClick={copy}
-          disabled={!copyText}
-        >
-          {statusText}
-        </button>
-      )}
-    </>
+    <button
+      type="button"
+      className="p-2 text-sm text-blue-500 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer"
+      onClick={copy}
+      disabled={!copyText}
+    >
+      Copy
+    </button>
   );
 }
 
@@ -58,7 +64,7 @@ function FlowContainer({
   children: React.ReactNode;
 }) {
   return (
-    <div className=" pb-5 flex flex-col">
+    <div className="pb-5 flex flex-col border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/70 text-gray-800 dark:text-gray-100 shadow-sm">
       <div className="ml-auto">
         <CopyButton copyText={copyText}></CopyButton>
       </div>
@@ -72,10 +78,19 @@ function HexFlow({ flow }: { flow: FlowData }) {
   return <FlowContainer copyText={hex}>{hex}</FlowContainer>;
 }
 
+function fastTextHash(text: string): string {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash << 5) - hash + text.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
+  }
+  return hash.toString(16); // Convert to hexadecimal string
+}
+
 function highlightText(
   flowText: string,
   search_string: string,
-  flag_string: string
+  flag_string: string,
 ) {
   if (flowText.length > MAX_LENGTH_FOR_HIGHLIGHT || flag_string === "") {
     return flowText;
@@ -86,33 +101,37 @@ function highlightText(
 
     const combined_regex = new RegExp(
       `${search_regex.source}|${flag_regex.source}`,
-      "gi"
+      "gi",
     );
 
-    let parts =
+    const parts =
       search_string !== ""
         ? flowText.split(combined_regex)
         : flowText.split(flag_regex);
 
-    const searchClasses = "bg-orange-200 rounded-sm";
-    const flagClasses = "bg-red-200 rounded-sm";
+    const searchClasses = "bg-orange-200 dark:bg-orange-900 rounded-sm";
+    const flagClasses = "bg-red-200 dark:bg-red-900 rounded-sm";
 
     return (
       <span>
-        {parts.map((part, i) => (
-          <span
-            key={i}
-            className={
-              search_string !== "" && search_regex.test(part)
-                ? searchClasses
-                : flag_regex.test(part)
-                ? flagClasses
-                : ""
-            }
-          >
-            {part}
-          </span>
-        ))}
+        {parts.map((part, i) => {
+          const id = `${fastTextHash(part)}-${i}`;
+
+          return (
+            <span
+              key={id}
+              className={
+                search_string !== "" && search_regex.test(part)
+                  ? searchClasses
+                  : flag_regex.test(part)
+                    ? flagClasses
+                    : ""
+              }
+            >
+              {part}
+            </span>
+          );
+        })}
       </span>
     );
   } catch (error) {
@@ -122,51 +141,53 @@ function highlightText(
 }
 
 function TextFlow({ flow }: { flow: FlowData }) {
-  let [searchParams] = useSearchParams();
-  const text_filter = searchParams.get(TEXT_FILTER_KEY);
-  const { data: flag_regex } = useGetFlagRegexQuery();
-  const text = highlightText(flow.data, text_filter ?? "", flag_regex ?? "");
+  const [searchParams] = useSearchParams();
+  const textFilter = searchParams.get(TEXT_FILTER_KEY);
+
+  const { data: flagRegex } = useGetFlagRegexQuery();
+
+  const text = highlightText(flow.data, textFilter ?? "", flagRegex ?? "");
 
   return <FlowContainer copyText={flow.data}>{text}</FlowContainer>;
 }
 
 function WebFlow({ flow }: { flow: FlowData }) {
   const data = flow.data;
-  const [header, ...rest] = data.split("\r\n\r\n");
-  const http_content = rest.join("\r\n\r\n");
 
-  const Hack = "iframe" as any;
+  const [header, ...rest] = data.split("\r\n\r\n");
+  const httpContent = rest.join("\r\n\r\n");
+
   return (
     <FlowContainer>
       <pre>{header}</pre>
-      <div className="border border-gray-200 rounded-lg">
-        <Hack
-          srcDoc={http_content}
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+        <iframe
+          srcDoc={httpContent}
           sandbox=""
-          height={300}
-          csp="default-src none" // there is a warning here but it actually works, not supported in firefox though :(
-        ></Hack>
+          className="w-full"
+          title="Web flow content"
+        ></iframe>
       </div>
     </FlowContainer>
   );
 }
 
 function PythonRequestFlow({
-  full_flow,
+  fullFlow,
   flow,
 }: {
-  full_flow: FullFlow;
+  fullFlow: FullFlow;
   flow: FlowData;
 }) {
   const { data, error } = useToSinglePythonRequestQuery({
     body: flow.b64,
-    id: full_flow._id,
+    id: fullFlow._id,
     tokenize: true,
   });
 
   return error ? (
     <FlowContainer>
-      <span className="text-red-500">
+      <span className="text-red-500 dark:text-red-400">
         Error generating Python request: {JSON.stringify(error)}
       </span>
     </FlowContainer>
@@ -189,12 +210,29 @@ function getFlowBody(flow: FlowData, flowType: string) {
     const contentType = flow.data.match(/Content-Type: ([^\s;]+)/im)?.[1];
     if (contentType) {
       const body = Buffer.from(flow.b64, "base64").subarray(
-        flow.data.indexOf("\r\n\r\n") + 4
+        flow.data.indexOf("\r\n\r\n") + 4,
       );
       return [contentType, body];
     }
   }
   return null;
+}
+
+function downloadBlob(
+  dataBase64: string,
+  id: string,
+  type = "application/octet-stream",
+) {
+  const blob = new Blob([Buffer.from(dataBase64, "base64")], { type });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.style.display = "none";
+  a.href = url;
+  a.download = "tulip-dl-" + id + ".dat";
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
 }
 
 type FlowProps = {
@@ -216,82 +254,59 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
 
   return (
     <div className="text-mono" id={id}>
-      <div
-        className="sticky shadow-md bg-white overflow-auto py-1 border-y"
-        style={{ top: SECONDARY_NAVBAR_HEIGHT }}
-      >
-        <div className="flex items-center h-6">
+      <div className="sticky shadow bg-gray-50 dark:bg-gray-900/70 overflow-auto py-1 border border-gray-300 dark:border-gray-700 top-12">
+        <div className="flex items-center h-6 gap-2">
           <div className="w-8 px-2">
             {flow.from === "s" ? (
-              <ArrowCircleLeftIcon className="fill-green-700" />
+              <ArrowLeftCircleIcon className="fill-green-700 dark:fill-green-400" />
             ) : (
-              <ArrowCircleRightIcon className="fill-red-700" />
+              <ArrowRightCircleIcon className="fill-red-700 dark:fill-red-400" />
             )}
           </div>
-          <div style={{ width: 200 }}>
-            {formatted_time}
-            <span className="text-gray-400 pl-3">{delta_time}ms</span>
+          <div className="w-52">
+            <span className="font-bold text-gray-800 dark:text-gray-100">
+              {formatted_time}
+            </span>
+            <span className="text-gray-400 dark:text-gray-300 pl-3">
+              {delta_time}ms
+            </span>
           </div>
           <button
-            className="bg-gray-200 py-1 px-2 rounded-md text-sm"
-            onClick={async () => {
-              window.open(
-                "https://gchq.github.io/CyberChef/#input=" +
-                  encodeURIComponent(flow.b64)
-              );
-            }}
+            type="button"
+            className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+            onClick={() => openInCyberChef(flow.b64)}
           >
-            Open in CC
+            Open in CyberChef
           </button>
-          {flowType == "Web" && flowBody && (
+          {flowBody && (
             <button
-              className="bg-gray-200 py-1 px-2 rounded-md text-sm ml-2"
-              onClick={async () => {
-                window.open(
-                  "https://gchq.github.io/CyberChef/#input=" +
-                    encodeURIComponent(flowBody[1].toString("base64"))
-                );
-              }}
+              type="button"
+              className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ml-2 transition-colors"
+              onClick={() => openInCyberChef(flowBody[1].toString("base64"))}
             >
-              Open body in CC
+              Open body in CyberChef
             </button>
           )}
           <button
-            className="bg-gray-200 py-1 px-2 rounded-md text-sm ml-2"
-            onClick={async () => {
-              const blob = new Blob([Buffer.from(flow.b64, "base64")], {
-                type: "application/octet-stream",
-              });
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.style.display = "none";
-              a.href = url;
-              a.download = "tulip-dl-" + id + ".dat";
-              document.body.appendChild(a);
-              a.click();
-              window.URL.revokeObjectURL(url);
-              a.remove();
-            }}
+            type="button"
+            className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ml-2 transition-colors"
+            onClick={() =>
+              downloadBlob(flow.b64, id, "application/octet-stream")
+            }
           >
-            Download
+            Download raw
           </button>
-          {flowType == "Web" && flowBody && (
+          {flowBody && (
             <button
-              className="bg-gray-200 py-1 px-2 rounded-md text-sm ml-2"
-              onClick={async () => {
-                const blob = new Blob([flowBody[1]], {
-                  type: flowBody[0].toString(),
-                });
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.style.display = "none";
-                a.href = url;
-                a.download = "tulip-dl-" + id + ".dat";
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
-              }}
+              type="button"
+              className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ml-2 transition-colors"
+              onClick={() =>
+                downloadBlob(
+                  flowBody[1].toString("base64"),
+                  id,
+                  flowBody[0].toString(),
+                )
+              }
             >
               Download body
             </button>
@@ -300,15 +315,15 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
             options={displayOptions}
             value={displayOption}
             onChange={setDisplayOption}
-            className="flex gap-2 text-gray-800 text-sm mr-4 ml-auto"
+            className="flex gap-2 text-gray-800 dark:text-gray-100 text-sm mr-4 ml-auto"
           />
         </div>
       </div>
       <div
         className={
           flow.from === "s"
-            ? "border-l-8 border-green-300"
-            : "border-l-8 border-red-300"
+            ? "border-l-8 border-green-300 dark:border-green-700"
+            : "border-l-8 border-red-300 dark:border-red-700"
         }
       >
         {displayOption === "Hex" && <HexFlow flow={flow}></HexFlow>}
@@ -317,7 +332,7 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
         {displayOption === "PythonRequest" && (
           <PythonRequestFlow
             flow={flow}
-            full_flow={full_flow}
+            fullFlow={full_flow}
           ></PythonRequestFlow>
         )}
       </div>
@@ -333,10 +348,12 @@ function formatIP(ip: string) {
 
 function FlowOverview({ flow }: { flow: FullFlow }) {
   const FILTER_KEY = TEXT_FILTER_KEY;
-  let [searchParams, setSearchParams] = useSearchParams();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
   return (
     <div>
-      {flow.signatures?.length > 0 ? (
+      {(flow.signatures?.length ?? 0) <= 0 ? undefined : (
         <div className="bg-blue-200 p-2">
           <div className="font-extrabold">Suricata</div>
 
@@ -356,7 +373,7 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
             <tbody>
               {flow.signatures.map((sig) => {
                 return (
-                  <tr>
+                  <tr key={sig.id}>
                     <td className="text-right">
                       <code>{sig.id}</code>
                     </td>
@@ -376,10 +393,13 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
             </tbody>
           </table>
         </div>
-      ) : undefined}
-      <div className="bg-yellow-200 p-2">
+      )}
+      <div className="bg-yellow-200 p-2 text-black dark:bg-yellow-800 dark:text-gray-100">
         <div className="font-extrabold">Meta</div>
-        <div className="pl-2 grid grid-cols-[max-content,1fr] gap-x-4">
+        <div className="pl-2 grid grid-cols-[max-content_1fr] gap-x-4">
+          <span className="text-right">Flow ID: </span>
+          <span>{flow._id}</span>
+
           <span className="text-right">Source: </span>
           <span>
             <a
@@ -387,7 +407,7 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
               href={`${API_BASE_PATH}/download/?file=${flow.filename}`}
             >
               {flow.filename}
-              <DownloadIcon className="inline-flex items-baseline w-5 h-5" />
+              <ArrowDownTrayIcon className="inline-flex items-baseline w-5 h-5" />
             </a>
           </span>
 
@@ -398,10 +418,12 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
           <div>
             [
             {flow.flags.map((query, i) => (
-              <span>
+              <span key={query}>
                 {i > 0 ? ", " : ""}
                 <button
-                  className="underline"
+                  type="button"
+                  className="underline hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                  title="Filter by this flag"
                   onClick={() => {
                     searchParams.set(FILTER_KEY, escapeStringRegexp(query));
                     setSearchParams(searchParams);
@@ -413,24 +435,22 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
             ))}
             ]
           </div>
-          <div className="text-right">Flagids: </div>
+          <div className="text-right">Flag Ids: </div>
           <div className="">
             [
             {flow.flagids.map((query, i) => (
-              <span key={i}>
+              <span key={query}>
                 {i > 0 ? ", " : ""}
-                <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-200 text-blue-900 font-bold text-xs mr-1">
-                  <button
-                    className="underline"
-                    onClick={() => {
-                      searchParams.set(FILTER_KEY, escapeStringRegexp(query));
-                      setSearchParams(searchParams);
-                    }}
-                  >
-                    {query}
-                  </button>
-                  <span className="ml-1 text-blue-700" title="FlagId">🏷️</span>
-                </span>
+                <button
+                  className="font-bold"
+                  onClick={() => {
+                    searchParams.set(FILTER_KEY, escapeStringRegexp(query));
+                    setSearchParams(searchParams);
+                  }}
+                >
+                  {query}
+                </button>
+                <span className="ml-1 text-blue-700" title="FlagId">🏷️</span>
               </span>
             ))}
             ]
@@ -452,7 +472,7 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
 }
 
 export function FlowView() {
-  let [searchParams, _setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const params = useParams();
   const navigate = useNavigate();
 
@@ -516,7 +536,7 @@ export function FlowView() {
       }
       setCurrentFlow((fi) => Math.max(0, fi - 1));
     },
-    [currentFlow]
+    [currentFlow],
   );
   useHotkeys(
     "l",
@@ -526,7 +546,7 @@ export function FlowView() {
       }
       setCurrentFlow((fi) => Math.min((flow?.flow?.length ?? 1) - 1, fi + 1));
     },
-    [currentFlow, flow?.flow?.length]
+    [currentFlow, flow?.flow?.length],
   );
 
   useEffect(() => {
@@ -537,24 +557,48 @@ export function FlowView() {
   }, [currentFlow]);
 
   if (isError) {
-    return <div>Error while fetching flow</div>;
+    return (
+      <div className="w-full h-full flex  justify-center items-center">
+        <div>
+          <h2 className="text-3xl font-bold mb-4">Error</h2>
+          <p className="text-red-500 text-lg mb-2">
+            Error fetching flow with id:
+          </p>
+          <code className="font-mono border border-gray-300 p-2 w-full block">
+            {id}
+          </code>
+          <p className="text-gray-500 mt-4">
+            Please check the id and try again.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (isLoading || flow == undefined) {
-    return <div>Loading...</div>;
+    return (
+      <div className="w-full h-full flex justify-center items-center">
+        <div>
+          <h2 className="text-6xl font-bold mb-4 animate-pulse">
+            Loading flow...
+          </h2>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div>
       <div
-        className="sticky shadow-md top-0 bg-white overflow-auto border-b border-b-gray-200 flex"
-        style={{ height: SECONDARY_NAVBAR_HEIGHT, zIndex: 100 }}
+        className="sticky shadow-md top-0 bg-white overflow-auto border-b border-b-gray-300 flex z-100 dark:bg-gray-800 dark:border-gray-600"
+        style={{ height: SECONDARY_NAVBAR_HEIGHT }}
       >
         {flow?.child_id != "000000000000000000000000" ||
         flow?.parent_id != "000000000000000000000000" ? (
           <div className="flex align-middle p-2 gap-3">
             <button
-              className="bg-yellow-700 text-white px-2 text-sm rounded-md disabled:opacity-50"
+              type="button"
+              className="bg-yellow-700 text-white px-2 text-sm rounded-md disabled:opacity-50 hover:bg-yellow-800 cursor-pointer"
               key={"parent" + flow.parent_id}
               disabled={flow?.parent_id === "000000000000000000000000"}
               onMouseDown={(e) => {
@@ -562,18 +606,18 @@ export function FlowView() {
                   // handle opening in new tab
                   window.open(
                     `/flow/${flow.parent_id}?${searchParams}`,
-                    "_blank"
+                    "_blank",
                   );
                 } else if (e.button === 0) {
                   navigate(`/flow/${flow.parent_id}?${searchParams}`);
                 }
               }}
             >
-              <ArrowCircleUpIcon className="inline-flex items-baseline w-5 h-5"></ArrowCircleUpIcon>{" "}
               Parent
             </button>
             <button
-              className="bg-yellow-700 text-white px-2 text-sm rounded-md disabled:opacity-50"
+              type="button"
+              className="bg-yellow-700 text-white px-2 text-sm rounded-md disabled:opacity-50 hover:bg-yellow-800 cursor-pointer"
               key={"child" + flow.child_id}
               disabled={flow?.child_id === "000000000000000000000000"}
               onMouseDown={(e) => {
@@ -581,28 +625,29 @@ export function FlowView() {
                   // handle opening in new tab
                   window.open(
                     `/flow/${flow.child_id}?${searchParams}`,
-                    "_blank"
+                    "_blank",
                   );
                 } else if (e.button === 0) {
                   navigate(`/flow/${flow.child_id}?${searchParams}`);
                 }
               }}
             >
-              <ArrowCircleDownIcon className="inline-flex items-baseline w-5 h-5"></ArrowCircleDownIcon>{" "}
               Child
             </button>
           </div>
         ) : undefined}
         <div className="flex align-middle p-2 gap-3 ml-auto">
           <button
-            className="bg-gray-700 text-white px-2 text-sm rounded-md"
+            type="button"
+            className="bg-gray-700 text-white px-2 text-sm rounded-md cursor-pointer hover:bg-gray-800 dark:hover:bg-gray-500 dark:bg-gray-700"
             onClick={copyPwn}
           >
             {pwnCopyStatusText}
           </button>
 
           <button
-            className="bg-gray-700 text-white px-2 text-sm rounded-md"
+            type="button"
+            className="bg-gray-700 text-white px-2 text-sm rounded-md cursor-pointer hover:bg-gray-800 dark:hover:bg-gray-500 dark:bg-gray-700"
             onClick={copyRequests}
           >
             {requestsCopyStatusText}
@@ -611,18 +656,20 @@ export function FlowView() {
       </div>
 
       {flow ? <FlowOverview flow={flow}></FlowOverview> : undefined}
-      {flow?.flow.map((flow_data, i, a) => {
-        const delta_time = a[i].time - (a[i - 1]?.time ?? a[i].time);
-        return (
-          <Flow
-            flow={flow_data}
-            delta_time={delta_time}
-            full_flow={flow}
-            key={flow._id + "-" + i}
-            id={flow._id + "-" + i}
-          ></Flow>
-        );
-      })}
+      <div key={flow._id}>
+        {flow?.flow.map((flow_data, i, a) => {
+          const delta_time = a[i].time - (a[i - 1]?.time ?? a[i].time);
+          return (
+            <Flow
+              flow={flow_data}
+              delta_time={delta_time}
+              full_flow={flow}
+              key={i}
+              id={flow._id + "-" + i}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

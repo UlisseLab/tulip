@@ -43,23 +43,22 @@ export interface Signature {
   action: string;
 }
 
-// TODO: pagination WTF
-export interface FlowsQuery {
+export type FlowsQuery = {
   // Text filter
   "flow.data"?: string;
-  // Service filter
-  // TODO: Why not use service name here?
   service: string;
-  dst_ip?: string;
-  dst_port?: number;
-  from_time?: string;
-  to_time?: string;
+  dst_ip?: string; // TODO: remove this, use service
+  dst_port?: number; // TODO: remove this, use service
+  from_time?: number;
+  to_time?: number;
   includeTags: string[];
   excludeTags: string[];
   tags: string[];
   flags: string[];
   flagids: string[];
-}
+  limit?: number;
+  offset?: number;
+};
 
 export type Service = {
   ip: string;

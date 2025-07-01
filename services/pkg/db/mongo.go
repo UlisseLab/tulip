@@ -126,6 +126,13 @@ func (db MongoDatabase) GetTagList() ([]string, error) {
 	return tags, nil
 }
 
+// CountFlows returns the number of flows matching the given filters.
+func (db MongoDatabase) CountFlows(filters bson.D) (int, error) {
+	collection := db.client.Database("pcap").Collection("pcap")
+	count, err := collection.CountDocuments(context.TODO(), filters)
+	return int(count), err
+}
+
 // GetSignature returns a signature document by its integer ID or ObjectID string
 func (db MongoDatabase) GetSignature(id string) (Signature, error) {
 	collection := db.client.Database("pcap").Collection("signatures")
@@ -582,6 +589,8 @@ type GetFlowsOptions struct {
 	SrcPort     int
 	SrcIp       string
 	Limit       int
+	Offset      int
+	FlowData    string // Optional data field to filter flows by
 }
 
 func (db MongoDatabase) GetFlows(ctx context.Context, opts *GetFlowsOptions) ([]FlowEntry, error) {
@@ -595,6 +604,10 @@ func (db MongoDatabase) GetFlows(ctx context.Context, opts *GetFlowsOptions) ([]
 			findOpts.SetLimit(int64(opts.Limit))
 		} else {
 			findOpts.SetLimit(100) // Default limit if not specified
+		}
+
+		if opts.Offset > 0 {
+			findOpts.SetSkip(int64(opts.Offset))
 		}
 
 		timeQuery := bson.M{}
@@ -631,6 +644,11 @@ func (db MongoDatabase) GetFlows(ctx context.Context, opts *GetFlowsOptions) ([]
 		}
 		if len(tagQueries) > 0 {
 			query["tags"] = tagQueries
+		}
+
+		if opts.FlowData != "" {
+			// If FlowData is provided, we filter by the data field
+			query["data"] = bson.M{"$regex": opts.FlowData, "$options": "i"} // Case-insensitive regex match
 		}
 	}
 

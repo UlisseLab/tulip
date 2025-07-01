@@ -8,7 +8,7 @@ function copyToClipboard(textToCopy: string) {
     return navigator.clipboard.writeText(textToCopy);
   } else {
     // text area method
-    let textArea = document.createElement("textarea");
+    const textArea = document.createElement("textarea");
     textArea.value = textToCopy;
     // make the textarea out of viewport
     textArea.style.position = "fixed";
@@ -19,6 +19,7 @@ function copyToClipboard(textToCopy: string) {
     textArea.select();
     return new Promise<void>((res, rej) => {
       // here the magic happens
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
       document.execCommand("copy") ? res() : rej();
       textArea.remove();
     });

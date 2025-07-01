@@ -77,11 +77,13 @@ func (api *Router) query(c echo.Context) error {
 		FlowData    string   `json:"flow.data"`
 		DstIp       string   `json:"dst_ip"`
 		DstPort     int      `json:"dst_port"`
-		FromTime    int      `json:"from_time"`
-		ToTime      int      `json:"to_time"`
+		FromTime    int64    `json:"from_time"`
+		ToTime      int64    `json:"to_time"`
 		FlagIds     []string `json:"flagids"`
 		Flags       []string `json:"flags"`
-		Service     string   `json:"service"` // Deprecated: not used anymore
+		Service     string   `json:"service"`
+		Limit       int      `json:"limit"`
+		Offset      int      `json:"offset"`
 	}
 
 	var req flowQueryRequest
@@ -176,7 +178,68 @@ func (api *Router) query(c echo.Context) error {
 		Flagids      []string           `json:"flagids"` // Flag IDs associated with this flow
 	}
 
-	results, err := api.DB.GetFlowList(filter)
+	// Convert bson.D filter to GetFlowsOptions
+	opts := &db.GetFlowsOptions{
+		Limit:  req.Limit,
+		Offset: req.Offset,
+	}
+	
+	// Set default limit if not specified
+	if opts.Limit <= 0 {
+		opts.Limit = 50
+	}
+	
+	// Parse filter to populate options
+	for _, elem := range filter {
+		switch elem.Key {
+		case "dst_ip":
+			if str, ok := elem.Value.(string); ok {
+				opts.DstIp = str
+			}
+		case "dst_port":
+			if port, ok := elem.Value.(int); ok {
+				opts.DstPort = port
+			}
+		case "time":
+			if timeRange, ok := elem.Value.(bson.D); ok {
+				for _, timeElem := range timeRange {
+					switch timeElem.Key {
+					case "$gte":
+						if val, ok := timeElem.Value.(int64); ok {
+							opts.FromTime = val
+						}
+					case "$lt":
+						if val, ok := timeElem.Value.(int64); ok {
+							opts.ToTime = val
+						}
+					}
+				}
+			}
+		case "tags":
+			if tagQuery, ok := elem.Value.(bson.M); ok {
+				if all, exists := tagQuery["$all"]; exists {
+					if tags, ok := all.([]string); ok {
+						opts.IncludeTags = tags
+					}
+				}
+				if nin, exists := tagQuery["$nin"]; exists {
+					if tags, ok := nin.([]string); ok {
+						opts.ExcludeTags = tags
+					}
+				}
+			}
+		case "flow.data":
+			if regexQuery, ok := elem.Value.(bson.M); ok {
+				if regex, exists := regexQuery["$regex"]; exists {
+					if str, ok := regex.(string); ok {
+						opts.FlowData = str
+					}
+				}
+			}
+		}
+	}
+
+	results, err := api.DB.GetFlows(c.Request().Context(), opts)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
