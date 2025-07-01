@@ -235,8 +235,7 @@ func (db MongoDatabase) ConfigureDatabase() {
 	db.InsertTag("blocked")
 	db.InsertTag("suricata")
 	db.InsertTag("starred")
-	db.InsertTag("flagid-in")
-	db.InsertTag("flagid-out")
+	db.InsertTag("flagid")
 	db.InsertTag("tcp")
 	db.InsertTag("udp")
 	db.ConfigureIndexes()
@@ -662,4 +661,80 @@ func (db MongoDatabase) GetFlowByID(ctx context.Context, id string) (*FlowEntry,
 		return nil, err
 	}
 	return &flow, nil
+}
+
+// FlagIdEntry rappresenta un flagid estratto dal DB
+// (replica la struct usata in assembler/flagid.go)
+type FlagIdEntry struct {
+	Service     string
+	Team        int
+	Round       int
+	Description string
+	FlagId      string
+}
+
+// GetRecentFlagIds estrae tutti i flagid dal DB (ultimi 5 round, con descrizione)
+func (db MongoDatabase) GetFlagIds() ([]FlagIdEntry, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	col := db.client.Database("pcap").Collection("flagids")
+	filter := bson.M{}
+
+	cur, err := col.Find(ctx, filter)
+	if err != nil {
+		slog.Error("[DEBUG] Errore durante Find in MongoDB", "error", err)
+		return nil, err
+	}
+	defer cur.Close(ctx)
+
+	entries := make([]FlagIdEntry, 0)
+	for cur.Next(ctx) {
+		var doc bson.M
+		if err := cur.Decode(&doc); err != nil {
+			slog.Error("[DEBUG] Errore nel decode del documento MongoDB", "error", err)
+			continue
+		}
+		entry := FlagIdEntry{}
+		if v, ok := doc["service"].(string); ok {
+			entry.Service = v
+		}
+		switch v := doc["team"].(type) {
+		case int32:
+			entry.Team = int(v)
+		case int64:
+			entry.Team = int(v)
+		case float64:
+			entry.Team = int(v)
+		case int:
+			entry.Team = v
+		}
+		switch v := doc["round"].(type) {
+		case int32:
+			entry.Round = int(v)
+		case int64:
+			entry.Round = int(v)
+		case float64:
+			entry.Round = int(v)
+		case int:
+			entry.Round = v
+		}
+		if v, ok := doc["description"].(string); ok {
+			entry.Description = v
+		}
+		if v, ok := doc["flagid"].(string); ok {
+			entry.FlagId = v
+		}
+		if entry.FlagId != "" {
+			entries = append(entries, entry)
+		}
+	}
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func (db MongoDatabase) GetClient() *mongo.Client {
+	return db.client
 }

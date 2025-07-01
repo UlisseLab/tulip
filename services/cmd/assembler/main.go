@@ -129,6 +129,7 @@ func runAssembler(cmd *cobra.Command, args []string) {
 	}
 
 	// Create assembler service
+	flagIdUrl := os.Getenv("FLAGID_URL")
 	config := assembler.Config{
 		DB:                   &gDB,
 		TcpLazy:              tcpLazy,
@@ -138,6 +139,7 @@ func runAssembler(cmd *cobra.Command, args []string) {
 		FlushInterval:        flushInterval,
 		ConnectionTcpTimeout: connectionTimeout,
 		ConnectionUdpTimeout: connectionTimeout,
+		FlagIdUrl:            flagIdUrl,
 	}
 	service := assembler.NewAssemblerService(config)
 

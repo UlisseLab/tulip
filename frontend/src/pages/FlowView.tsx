@@ -417,17 +417,20 @@ function FlowOverview({ flow }: { flow: FullFlow }) {
           <div className="">
             [
             {flow.flagids.map((query, i) => (
-              <span>
+              <span key={i}>
                 {i > 0 ? ", " : ""}
-                <button
-                  className="font-bold"
-                  onClick={() => {
-                    searchParams.set(FILTER_KEY, escapeStringRegexp(query));
-                    setSearchParams(searchParams);
-                  }}
-                >
-                  {query}
-                </button>
+                <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-200 text-blue-900 font-bold text-xs mr-1">
+                  <button
+                    className="underline"
+                    onClick={() => {
+                      searchParams.set(FILTER_KEY, escapeStringRegexp(query));
+                      setSearchParams(searchParams);
+                    }}
+                  >
+                    {query}
+                  </button>
+                  <span className="ml-1 text-blue-700" title="FlagId">🏷️</span>
+                </span>
               </span>
             ))}
             ]
