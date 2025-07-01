@@ -121,6 +121,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:27017:27017" # Only expose to localhost
+    volumes:
+      - mongo_data:/data/db
 
   flagid:
     build:
@@ -134,3 +136,6 @@ services:
       FLAGID_COLLECTION: flagids
       FLAGID_URL: http://host.docker.internal:8081/flagId
       FLAGID_FETCH_INTERVAL: 60
+
+volumes:
+  mongo_data:

@@ -95,7 +95,6 @@ func (s *Service) reassemblyCallback(entry db.FlowEntry) {
 	if err != nil {
 		slog.Error("[DEBUG] Errore nel recupero flagid da MongoDB", "error", err, "flow_id", entry.Id)
 	} else {
-		slog.Info("[DEBUG] Recuperati flagid da MongoDB", "count", len(flagidEntries), "flow_id", entry.Id)
 		
 		if len(flagidEntries) > 0 {
 			allFlagids := make([]string, 0, len(flagidEntries))
