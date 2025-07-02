@@ -249,32 +249,49 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
   // Basic type detection, currently unused
   const [displayOption, setDisplayOption] = useState("Plain");
 
+  const [collapsed, setCollapsed] = useState(false);
+
   const flowType = detectType(flow);
   const flowBody = getFlowBody(flow, flowType);
 
   return (
     <div className="text-mono" id={id}>
-      <div className="sticky shadow bg-gray-50 dark:bg-gray-900/70 overflow-auto py-1 border border-gray-300 dark:border-gray-700 top-12">
-        <div className="flex items-center h-6 gap-2">
-          <div className="w-8 px-2">
-            {flow.from === "s" ? (
-              <ArrowLeftCircleIcon className="fill-green-700 dark:fill-green-400" />
-            ) : (
-              <ArrowRightCircleIcon className="fill-red-700 dark:fill-red-400" />
-            )}
-          </div>
-          <div className="w-52">
-            <span className="font-bold text-gray-800 dark:text-gray-100">
-              {formatted_time}
-            </span>
-            <span className="text-gray-400 dark:text-gray-300 pl-3">
-              {delta_time}ms
-            </span>
-          </div>
+      <div
+        className="sticky shadow bg-gray-50 dark:bg-gray-900/70 overflow-auto py-1 border border-gray-300 dark:border-gray-700 top-12 cursor-pointer select-none flex items-center h-6 gap-2"
+        onClick={() => setCollapsed((c) => !c)}
+        title={collapsed ? "Espandi richiesta" : "Chiudi richiesta"}
+        style={{ userSelect: "none" }}
+      >
+        <span className="w-6 flex items-center justify-center">
+          {collapsed ? (
+            <span className="text-lg">▶</span>
+          ) : (
+            <span className="text-lg">▼</span>
+          )}
+        </span>
+        <div className="w-8 px-2">
+          {flow.from === "s" ? (
+            <ArrowLeftCircleIcon className="fill-green-700 dark:fill-green-400" />
+          ) : (
+            <ArrowRightCircleIcon className="fill-red-700 dark:fill-red-400" />
+          )}
+        </div>
+        <div className="w-52">
+          <span className="font-bold text-gray-800 dark:text-gray-100">
+            {formatted_time}
+          </span>
+          <span className="text-gray-400 dark:text-gray-300 pl-3">
+            {delta_time}ms
+          </span>
+        </div>
+        <div className="flex gap-2 ml-2">
           <button
             type="button"
             className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-            onClick={() => openInCyberChef(flow.b64)}
+            onClick={(e) => {
+              e.stopPropagation();
+              openInCyberChef(flow.b64);
+            }}
           >
             Open in CyberChef
           </button>
@@ -282,7 +299,10 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
             <button
               type="button"
               className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ml-2 transition-colors"
-              onClick={() => openInCyberChef(flowBody[1].toString("base64"))}
+              onClick={(e) => {
+                e.stopPropagation();
+                openInCyberChef(flowBody[1].toString("base64"));
+              }}
             >
               Open body in CyberChef
             </button>
@@ -290,9 +310,10 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
           <button
             type="button"
             className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ml-2 transition-colors"
-            onClick={() =>
-              downloadBlob(flow.b64, id, "application/octet-stream")
-            }
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadBlob(flow.b64, id, "application/octet-stream");
+            }}
           >
             Download raw
           </button>
@@ -300,42 +321,47 @@ function Flow({ full_flow, flow, delta_time, id }: FlowProps) {
             <button
               type="button"
               className="py-1 px-2 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer ml-2 transition-colors"
-              onClick={() =>
+              onClick={(e) => {
+                e.stopPropagation();
                 downloadBlob(
                   flowBody[1].toString("base64"),
                   id,
                   flowBody[0].toString(),
-                )
-              }
+                );
+              }}
             >
               Download body
             </button>
           )}
+        </div>
+        <div className="flex gap-2 text-gray-800 dark:text-gray-100 text-sm mr-4 ml-auto">
           <RadioGroup
             options={displayOptions}
             value={displayOption}
             onChange={setDisplayOption}
-            className="flex gap-2 text-gray-800 dark:text-gray-100 text-sm mr-4 ml-auto"
+            className="flex gap-2 text-gray-800 dark:text-gray-100 text-sm"
           />
         </div>
       </div>
-      <div
-        className={
-          flow.from === "s"
-            ? "border-l-8 border-green-300 dark:border-green-700"
-            : "border-l-8 border-red-300 dark:border-red-700"
-        }
-      >
-        {displayOption === "Hex" && <HexFlow flow={flow}></HexFlow>}
-        {displayOption === "Plain" && <TextFlow flow={flow}></TextFlow>}
-        {displayOption === "Web" && <WebFlow flow={flow}></WebFlow>}
-        {displayOption === "PythonRequest" && (
-          <PythonRequestFlow
-            flow={flow}
-            fullFlow={full_flow}
-          ></PythonRequestFlow>
-        )}
-      </div>
+      {!collapsed && (
+        <div
+          className={
+            flow.from === "s"
+              ? "border-l-8 border-green-300 dark:border-green-700"
+              : "border-l-8 border-red-300 dark:border-red-700"
+          }
+        >
+          {displayOption === "Hex" && <HexFlow flow={flow}></HexFlow>}
+          {displayOption === "Plain" && <TextFlow flow={flow}></TextFlow>}
+          {displayOption === "Web" && <WebFlow flow={flow}></WebFlow>}
+          {displayOption === "PythonRequest" && (
+            <PythonRequestFlow
+              flow={flow}
+              fullFlow={full_flow}
+            ></PythonRequestFlow>
+          )}
+        </div>
+      )}
     </div>
   );
 }
