@@ -134,7 +134,7 @@ services:
       MONGO_URI: mongodb://mongo:27017/
       FLAGID_DB: pcap
       FLAGID_COLLECTION: flagids
-      FLAGID_URL: http://host.docker.internal:8081/flagId
+      FLAGID_URL: ${FLAGID_URL}
       FLAGID_FETCH_INTERVAL: 60
 
 volumes:
