@@ -647,8 +647,8 @@ func (db MongoDatabase) GetFlows(ctx context.Context, opts *GetFlowsOptions) ([]
 		}
 
 		if opts.FlowData != "" {
-			// If FlowData is provided, we filter by the data field
-			query["data"] = bson.M{"$regex": opts.FlowData, "$options": "i"} // Case-insensitive regex match
+			// Corretto: cerca la regex su tutti i campi 'data' dentro l'array 'flow'
+			query["flow.data"] = bson.M{"$regex": opts.FlowData, "$options": "i"} // Case-insensitive regex match
 		}
 	}
 

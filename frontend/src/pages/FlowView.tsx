@@ -92,48 +92,56 @@ function highlightText(
   search_string: string,
   flag_string: string,
 ) {
-  if (flowText.length > MAX_LENGTH_FOR_HIGHLIGHT || flag_string === "") {
+  if (flowText.length > MAX_LENGTH_FOR_HIGHLIGHT || (flag_string === "" && search_string === "")) {
     return flowText;
   }
   try {
-    const flag_regex = new RegExp(`(${flag_string})`, "g");
-    const search_regex = new RegExp(`(${search_string})`, "gi");
-
-    const combined_regex = new RegExp(
-      `${search_regex.source}|${flag_regex.source}`,
-      "gi",
-    );
-
-    const parts =
-      search_string !== ""
-        ? flowText.split(combined_regex)
-        : flowText.split(flag_regex);
-
-    const searchClasses = "bg-orange-200 dark:bg-orange-900 rounded-sm";
-    const flagClasses = "bg-red-200 dark:bg-red-900 rounded-sm";
-
-    return (
-      <span>
-        {parts.map((part, i) => {
-          const id = `${fastTextHash(part)}-${i}`;
-
-          return (
-            <span
-              key={id}
-              className={
-                search_string !== "" && search_regex.test(part)
-                  ? searchClasses
-                  : flag_regex.test(part)
-                    ? flagClasses
-                    : ""
-              }
-            >
-              {part}
-            </span>
-          );
-        })}
-      </span>
-    );
+    let search_regex: RegExp | null = null;
+    if (search_string !== "") {
+      // Usa sempre escapeStringRegexp per ricerca letterale
+      search_regex = new RegExp(escapeStringRegexp(search_string), "gi");
+    }
+    let flag_regex: RegExp | null = null;
+    if (flag_string !== "") {
+      try {
+        flag_regex = new RegExp(flag_string, "g");
+      } catch (e) {
+        flag_regex = null;
+      }
+    }
+    // Costruisci una regex combinata per trovare tutti i match
+    let combined_regex: RegExp | null = null;
+    if (search_regex && flag_regex) {
+      combined_regex = new RegExp(`(${search_regex.source})|(${flag_regex.source})`, "gi");
+    } else if (search_regex) {
+      combined_regex = search_regex;
+    } else if (flag_regex) {
+      combined_regex = flag_regex;
+    }
+    if (!combined_regex) return flowText;
+    const result: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    let idx = 0;
+    while ((match = combined_regex.exec(flowText)) !== null) {
+      if (match.index > lastIndex) {
+        result.push(flowText.slice(lastIndex, match.index));
+      }
+      let className = "";
+      if (search_regex && match[1]) {
+        className = "bg-orange-200 dark:bg-orange-900 rounded-sm";
+      } else if (flag_regex && match[2]) {
+        className = "bg-red-200 dark:bg-red-900 rounded-sm";
+      }
+      result.push(
+        <span key={idx++ + '-' + match.index} className={className}>{match[0]}</span>
+      );
+      lastIndex = combined_regex.lastIndex;
+    }
+    if (lastIndex < flowText.length) {
+      result.push(flowText.slice(lastIndex));
+    }
+    return <span>{result}</span>;
   } catch (error) {
     console.log(error);
     return flowText;
