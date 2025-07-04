@@ -299,6 +299,7 @@ import type { Service } from "../types";
 export function Header() {
   const [searchParams] = useSearchParams();
   const { setToLastnTicks, currentTick, setTimeParam } = useMessyTimeStuff();
+  const navigate = useNavigate();
 
   useHotkeys("a", () => setToLastnTicks(5));
   useHotkeys("c", () => {
@@ -309,6 +310,10 @@ export function Header() {
     setTimeParam("", START_FILTER_KEY);
     setTimeParam("", END_FILTER_KEY);
   });
+
+  const handleReset = () => {
+    navigate("/");
+  };
 
   return (
     <>
@@ -343,6 +348,15 @@ export function Header() {
           Graph view
         </div>
       </Link>
+      <div className="ml-2">
+        <button
+          type="button"
+          className="bg-red-100 dark:bg-red-900 text-gray-800 dark:text-gray-100 rounded-md border border-red-300 dark:border-red-800 px-2 py-1 text-center cursor-pointer hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+          onClick={handleReset}
+        >
+          Reset
+        </button>
+      </div>
 
       <div className="ml-auto mr-4 flex items-center">
         <div className="mr-4">
