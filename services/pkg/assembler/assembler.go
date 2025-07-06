@@ -23,7 +23,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/ip4defrag"
 	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/reassembly"
 )
 
@@ -40,7 +40,6 @@ type Service struct {
 
 type Config struct {
 	DB            db.Database    // the database to use for storing flows
-	BpfFilter     string         // BPF filter to apply to the pcap handle
 	FlushInterval time.Duration  // Interval to flush non-terminated connections
 	FlagRegex     *regexp.Regexp // Regex to apply for flagging flows
 	TcpLazy       bool           // Lazy decoding for TCP packets
@@ -115,19 +114,12 @@ func (s *Service) FlushConnections() {
 	}
 }
 
-func (s *Service) ProcessPcapHandle(handle *pcap.Handle, fname string) {
+func (s *Service) ProcessPcapHandle(handle *pcapgo.Reader, fname string) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("Recovered from panic in ProcessPcapHandle", "error", r, "file", fname)
 		}
 	}()
-
-	if s.BpfFilter != "" {
-		if err := handle.SetBPFFilter(s.BpfFilter); err != nil {
-			slog.Error("Failed to set BPF filter", "error", err, "filter", s.BpfFilter)
-			return
-		}
-	}
 
 	processedCount := int64(0)
 	processedExists, processedPcap := s.DB.GetPcap(fname)
@@ -247,12 +239,18 @@ func (s *Service) ProcessPcapHandle(handle *pcap.Handle, fname string) {
 }
 
 func (s Service) HandlePcapUri(fname string) {
-	handle, err := pcap.OpenOffline(fname)
+	file, err := os.Open(fname)
 	if err != nil {
-		slog.Error("PCAP OpenOffline error", "err", err)
+		slog.Error("Failed to open PCAP file", "file", fname, "err", err)
 		return
 	}
-	defer handle.Close()
+	defer file.Close()
 
-	s.ProcessPcapHandle(handle, fname)
+	reader, err := pcapgo.NewReader(file)
+	if err != nil {
+		slog.Error("Failed to create PCAP reader", "file", fname, "err", err)
+		return
+	}
+
+	s.ProcessPcapHandle(reader, fname)
 }
