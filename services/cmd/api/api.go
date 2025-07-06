@@ -183,12 +183,12 @@ func (api *Router) query(c echo.Context) error {
 		Limit:  req.Limit,
 		Offset: req.Offset,
 	}
-	
+
 	// Set default limit if not specified
 	if opts.Limit <= 0 {
 		opts.Limit = 50
 	}
-	
+
 	// Parse filter to populate options
 	for _, elem := range filter {
 		switch elem.Key {
