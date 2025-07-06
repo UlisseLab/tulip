@@ -36,9 +36,9 @@ func main() {
 	}
 
 	rootCmd.Flags().String("listen", "0.0.0.0:9999", "TCP address to listen on for incoming PCAP streams")
-	rootCmd.Flags().String("temp-dir", "/tmp/ingestor_tmp", "Directory to temporarily store incoming PCAP files")
-	rootCmd.Flags().String("dest-dir", "/tmp/ingestor_ready", "Directory to move rotated PCAP files for downstream processing")
-	rootCmd.Flags().Duration("rotate-interval", time.Minute, "Interval for rotating files from temp to destination folder (e.g. 1m, 30s)")
+	rootCmd.Flags().String("temp-dir", "", "directory to temporarily store incoming PCAP files, if not specified a temp directory will be created")
+	rootCmd.Flags().String("dest-dir", "", "directory to move rotated PCAP files for downstream processing")
+	rootCmd.Flags().Duration("rotate-interval", time.Minute, "interval for rotating files from temp to destination folder (e.g. 1m, 30s)")
 
 	viper.BindPFlag("listen", rootCmd.Flags().Lookup("listen"))
 	viper.BindPFlag("temp-dir", rootCmd.Flags().Lookup("temp-dir"))
@@ -68,6 +68,20 @@ func runIngestor(cmd *cobra.Command, args []string) {
 		cfgDestDir        = viper.GetString("dest-dir")
 		cfgRotateInterval = viper.GetDuration("rotate-interval")
 	)
+
+	if cfgTempDir == "" {
+		var err error
+		cfgTempDir, err = os.MkdirTemp("", "tulip-ingestor-")
+		if err != nil {
+			slog.Error("Failed to create temporary directory", slog.Any("err", err))
+			os.Exit(1)
+		}
+	}
+
+	if cfgDestDir == "" {
+		slog.Error("Destination directory must be specified. Use --dest-dir or TULIP_DEST_DIR environment variable.")
+		os.Exit(1)
+	}
 
 	slog.Info("Starting ingestor service",
 		slog.String("listen", cfgListenAddr),
