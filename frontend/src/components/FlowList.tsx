@@ -207,7 +207,26 @@ export function FlowList() {
   const transformedFlowData = allFlows;
 
   const onHeartHandler = async (flow: Flow) => {
-    await starFlow({ id: flow._id, star: !flow.tags.includes("starred") });
+    const isCurrentlyStarred = flow.tags.includes("starred");
+    try {
+      await starFlow({ id: flow._id, star: !isCurrentlyStarred });
+      // Aggiorna localmente lo stato dei flows
+      setAllFlows((prevFlows) =>
+        prevFlows.map((f) =>
+          f._id === flow._id
+            ? {
+                ...f,
+                tags: isCurrentlyStarred
+                  ? f.tags.filter((t) => t !== "starred")
+                  : [...f.tags, "starred"],
+              }
+            : f
+        )
+      );
+    } catch (e) {
+      // opzionale: gestisci errori
+      console.error("Errore aggiornamento star:", e);
+    }
   };
 
   const navigate = useNavigate();

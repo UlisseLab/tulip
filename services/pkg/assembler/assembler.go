@@ -13,10 +13,12 @@
 package assembler
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"regexp"
+	"strings"
 	"time"
 	"tulip/pkg/db"
 
@@ -25,6 +27,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/reassembly"
+	"golang.org/x/exp/slices"
 )
 
 type Service struct {
@@ -48,6 +51,8 @@ type Config struct {
 
 	ConnectionTcpTimeout time.Duration
 	ConnectionUdpTimeout time.Duration
+
+	FlagIdUrl string // URL del servizio flagid
 }
 
 func NewAssemblerService(opts Config) *Service {
@@ -82,6 +87,49 @@ func (s *Service) reassemblyCallback(entry db.FlowEntry) {
 	// Apply flag in / flagout
 	if s.FlagRegex != nil {
 		ApplyFlagTags(&entry, *s.FlagRegex)
+	}
+
+	// Cerca flagid nei payload (nuova logica: tag con descrizione)
+	flagidEntries, err := getFlagIds(s.Config.DB)
+	if err != nil {
+		slog.Error("[DEBUG] Errore nel recupero flagid da MongoDB", "error", err, "flow_id", entry.Id)
+	} else {
+		
+		if len(flagidEntries) > 0 {
+			allFlagids := make([]string, 0, len(flagidEntries))
+			for _, f := range flagidEntries {
+				allFlagids = append(allFlagids, f.FlagId)
+			}
+
+			
+			for _, flowItem := range entry.Flow {
+				if flowItem.Data == "" {
+					continue
+				}
+				
+				for _, flagidEntry := range flagidEntries {
+					if len(flagidEntry.FlagId) == 0 {
+						continue
+					}
+					
+					if contains(flowItem.Data, flagidEntry.FlagId) {
+						// Aggiungi il flagid alla lista se non c'è già
+						if !slices.Contains(entry.Flagids, flagidEntry.FlagId) {
+							entry.Flagids = append(entry.Flagids, flagidEntry.FlagId)
+						}
+						
+						// Crea il tag
+						tag := "flagid"
+						
+						// Aggiungi il tag se non c'è già
+						if !slices.Contains(entry.Tags, tag) {
+							entry.Tags = append(entry.Tags, tag)
+							
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Finally, insert the new entry
@@ -163,7 +211,7 @@ func (s *Service) ProcessPcapHandle(handle *pcapgo.Reader, fname string) {
 		done := false
 
 		// defrag the IPv4 packet if required
-		// (TODO; IPv6 will not be defragged)
+		// (TODO; IPv6 will not be defragmented)
 		ip4Layer := packet.Layer(layers.LayerTypeIPv4)
 		if !nodefrag && ip4Layer != nil {
 
@@ -253,4 +301,17 @@ func (s Service) HandlePcapUri(fname string) {
 	}
 
 	s.ProcessPcapHandle(reader, fname)
+}
+
+// contains returns true if substr is in s
+func contains(s, substr string) bool {
+	return len(substr) > 0 && len(s) > 0 && strings.Contains(s, substr)
+}
+
+// getFlagIds è un helper locale che chiama direttamente il metodo del database
+func getFlagIds(database db.Database) ([]db.FlagIdEntry, error) {
+	if mongoDB, ok := database.(interface{ GetFlagIds() ([]db.FlagIdEntry, error) }); ok {
+		return mongoDB.GetFlagIds()
+	}
+	return nil, fmt.Errorf("database does not support GetRecentFlagIds")
 }

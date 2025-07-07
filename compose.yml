@@ -121,3 +121,21 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:27017:27017" # Only expose to localhost
+    volumes:
+      - mongo_data:/data/db
+
+  flagid:
+    build:
+      context: services/flagid
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URI: mongodb://mongo:27017/
+      FLAGID_DB: pcap
+      FLAGID_COLLECTION: flagids
+      FLAGID_URL: ${FLAGID_URL}
+      FLAGID_FETCH_INTERVAL: 60
+
+volumes:
+  mongo_data:

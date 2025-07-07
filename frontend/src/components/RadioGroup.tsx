@@ -19,7 +19,10 @@ export function RadioGroup<T extends string>({
         <div
           key={option}
           tabIndex={0}
-          onClick={() => onChange(option)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange(option);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") onChange(option);
           }}
