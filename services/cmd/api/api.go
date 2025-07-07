@@ -599,7 +599,7 @@ func flowToPwn(flow *db.FlowEntry) string {
 	b.WriteString("from pwn import *\nimport sys\n\nhost = sys.argv[1]\n")
 	b.WriteString(fmt.Sprintf("proc = remote(host, %d)\n", flow.DstPort))
 	for _, msg := range flow.Flow {
-		data, _ := base64.StdEncoding.DecodeString(msg.B64)
+		data := msg.Raw
 		if msg.From == "c" {
 			b.WriteString(fmt.Sprintf("proc.write(b\"%s\")\n", escapeBytes(data)))
 		} else {

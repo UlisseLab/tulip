@@ -12,7 +12,6 @@ package db
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"log/slog"
@@ -280,8 +279,7 @@ func (db MongoDatabase) InsertFlow(flow FlowEntry) {
 	for idx := range flow.Flow {
 		flowItem := &flow.Flow[idx]
 
-		// Base64 encode the raw data string
-		flowItem.B64 = base64.StdEncoding.EncodeToString([]byte(flowItem.Data))
+		flowItem.Raw = []byte(flowItem.Data)
 		// filter the data string down to only printable characters
 		flowItem.Data = strings.Map(func(r rune) rune {
 			if r < 128 {
@@ -337,21 +335,25 @@ func (db MongoDatabase) InsertFlow(flow FlowEntry) {
 }
 
 type PcapFile struct {
-	FileName string `bson:"file_name"`
-	Position int64  `bson:"position"`
+	FileName string `bson:"file_name"` // Name of the pcap file
+	Position int64  `bson:"position"`  // N. of packets processed so far
+	Finished bool   `bson:"finished"`  // Indicates if the pcap file has been fully processed
 }
 
 // Insert a new pcap uri, returns true if the pcap was not present yet,
 // otherwise returns false
-func (db MongoDatabase) InsertPcap(uri string, position int64) bool {
+func (db MongoDatabase) InsertPcap(pcap PcapFile) bool {
 	files := db.client.Database("pcap").Collection("filesImported")
-	exists, _ := db.GetPcap(uri)
-	if !exists {
-		files.InsertOne(context.TODO(), bson.M{"file_name": uri, "position": position})
-	} else {
-		files.UpdateOne(context.TODO(), bson.M{"file_name": uri}, bson.M{"$set": bson.M{"position": position}})
+
+	// it could already be present, so let's update it
+	filter := bson.M{"file_name": pcap.FileName}
+
+	_, err := files.ReplaceOne(context.TODO(), filter, pcap, options.Replace().SetUpsert(true))
+	if err != nil {
+		log.Println("Error occured while inserting pcap file: ", err)
+		return false
 	}
-	return !exists
+	return true
 }
 
 func (db MongoDatabase) GetPcap(uri string) (bool, PcapFile) {

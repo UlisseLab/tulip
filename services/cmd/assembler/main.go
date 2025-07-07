@@ -13,8 +13,10 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -127,6 +129,10 @@ func runAssembler(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// global ctx
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
 	// Create assembler service
 	flagIdUrl := os.Getenv("FLAGID_URL")
 	config := assembler.Config{
@@ -149,7 +155,14 @@ func runAssembler(cmd *cobra.Command, args []string) {
 	pollInterval := 2 * time.Second
 	seen := make(map[string]struct{})
 
+watchLoop:
 	for {
+		select {
+		case <-ctx.Done():
+			break watchLoop
+		default:
+		}
+
 		files, err := os.ReadDir(watchDir)
 		if err != nil {
 			slog.Error("Failed to read watch directory", slog.Any("err", err))
@@ -157,6 +170,12 @@ func runAssembler(cmd *cobra.Command, args []string) {
 			continue
 		}
 		for _, file := range files {
+			select {
+			case <-ctx.Done():
+				break watchLoop
+			default:
+			}
+
 			if file.IsDir() {
 				continue
 			}
@@ -171,7 +190,7 @@ func runAssembler(cmd *cobra.Command, args []string) {
 			seen[fullPath] = struct{}{}
 
 			slog.Info("Ingesting new PCAP file", slog.String("file", fullPath))
-			service.HandlePcapUri(fullPath)
+			service.HandlePcapUri(ctx, fullPath)
 		}
 		time.Sleep(pollInterval)
 	}

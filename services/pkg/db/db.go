@@ -19,7 +19,7 @@ import (
 type FlowItem struct {
 	From string `bson:"from" json:"from"` // From: "s" / "c" for server or client
 	Data string `bson:"data" json:"data"` // Data, in a somewhat readable format
-	B64  string `bson:"b64" json:"b64"`   // The raw data, base64 encoded. TODO: Replace this with gridfs
+	Raw  []byte `bson:"raw" json:"b64"`   // The raw data, in bytes. The `b64` tag is used because this is base64 encoded in the frontend
 	Time int    `bson:"time" json:"time"` // Timestamp of the first packet in the flow (Epoch / ms)
 }
 
@@ -53,5 +53,6 @@ type Database interface {
 	GetFlowDetail(id string) (*FlowEntry, error)     // Get detailed flow information by ID
 	InsertFlow(flow FlowEntry)                       // Insert a new flow into the database
 	GetPcap(uri string) (bool, PcapFile)             // Check if a pcap file exists and return its metadata
-	InsertPcap(uri string, position int64) bool      // Insert a new pcap file or update its position
+	InsertPcap(file PcapFile) bool                   // Insert a new pcap file or update its position
+	GetFlagIds() ([]FlagIdEntry, error)
 }

@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"os"
@@ -241,7 +242,7 @@ func addTools(mcpServ *server.MCPServer, database *db.MongoDatabase) {
 				fmt.Fprintf(content, "%s\n", message.Data)
 				fmt.Fprintf(content, "```\n")
 				fmt.Fprintf(content, "Message data in base64: ```\n")
-				fmt.Fprintf(content, "%s\n", message.B64)
+				fmt.Fprintf(content, "%s\n", base64.StdEncoding.EncodeToString(message.Raw))
 				fmt.Fprintf(content, "```\n")
 			}
 

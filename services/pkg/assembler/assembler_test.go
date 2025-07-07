@@ -56,14 +56,15 @@ func writeTempFile(t *testing.T, data []byte, suffix string) string {
 
 type NoopDatabase struct{}
 
-func (n *NoopDatabase) GetFlowList(filters bson.D) ([]db.FlowEntry, error) { return nil, nil }
-func (n *NoopDatabase) GetTagList() ([]string, error)                      { return nil, nil }
-func (n *NoopDatabase) GetSignature(id string) (db.Signature, error)       { return db.Signature{}, nil }
-func (n *NoopDatabase) SetStar(flowID string, star bool) error             { return nil }
-func (n *NoopDatabase) GetFlowDetail(id string) (*db.FlowEntry, error)     { return nil, nil }
-func (n *NoopDatabase) InsertFlow(flow db.FlowEntry)                       {}
-func (n *NoopDatabase) GetPcap(uri string) (bool, db.PcapFile)             { return false, db.PcapFile{} }
-func (n *NoopDatabase) InsertPcap(uri string, position int64) bool         { return true }
+func (n *NoopDatabase) GetFlowList(bson.D) ([]db.FlowEntry, error)     { return nil, nil }
+func (n *NoopDatabase) GetTagList() ([]string, error)                  { return nil, nil }
+func (n *NoopDatabase) GetSignature(string) (db.Signature, error)      { return db.Signature{}, nil }
+func (n *NoopDatabase) SetStar(string, bool) error                     { return nil }
+func (n *NoopDatabase) GetFlowDetail(id string) (*db.FlowEntry, error) { return nil, nil }
+func (n *NoopDatabase) InsertFlow(db.FlowEntry)                        {}
+func (n *NoopDatabase) GetPcap(string) (bool, db.PcapFile)             { return false, db.PcapFile{} }
+func (n *NoopDatabase) InsertPcap(db.PcapFile) bool                    { return true }
+func (n *NoopDatabase) GetFlagIds() ([]db.FlagIdEntry, error)          { return nil, nil }
 
 func makeTestAssembler() *Service {
 	cfg := Config{
@@ -99,7 +100,7 @@ func TestHandlePcapUri_DoesNotCrashOnCorruptedOrPcapng(t *testing.T) {
 					t.Errorf("HandlePcapUri panicked on %s: %v", tc.name, r)
 				}
 			}()
-			assembler.HandlePcapUri(fname)
+			assembler.HandlePcapUri(t.Context(), fname)
 		})
 	}
 }

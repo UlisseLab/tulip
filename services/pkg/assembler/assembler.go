@@ -13,11 +13,12 @@
 package assembler
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"tulip/pkg/db"
@@ -27,7 +28,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/reassembly"
-	"golang.org/x/exp/slices"
+	"github.com/panjf2000/ants/v2"
 )
 
 type Service struct {
@@ -39,6 +40,8 @@ type Service struct {
 
 	AssemblerTcp *reassembly.Assembler
 	AssemblerUdp *UdpAssembler
+
+	flowChannel chan db.FlowEntry // Channel for processed flow entries
 }
 
 type Config struct {
@@ -70,72 +73,38 @@ func NewAssemblerService(opts Config) *Service {
 
 		AssemblerTcp: reassembly.NewAssembler(streamPool),
 		AssemblerUdp: assemblerUdp,
+
+		flowChannel: make(chan db.FlowEntry), // Buffered channel for flow entries
 	}
 	srv.Config = opts
 
 	onComplete := func(fe db.FlowEntry) { srv.reassemblyCallback(fe) }
 	srv.StreamFactory.OnComplete = onComplete
 
+	go srv.insertFlows()
+
 	return srv
 }
 
-// TODO; FIXME; RDJ; this is kinda gross, but this is PoC level code
-func (s *Service) reassemblyCallback(entry db.FlowEntry) {
-	// Parsing HTTP will decode encodings to a plaintext format
-	s.ParseHttpFlow(&entry)
-
-	// Apply flag in / flagout
-	if s.FlagRegex != nil {
-		ApplyFlagTags(&entry, *s.FlagRegex)
-	}
-
-	// Cerca flagid nei payload (nuova logica: tag con descrizione)
-	flagidEntries, err := getFlagIds(s.Config.DB)
+// HandlePcapUri processes a PCAP file from a given URI.
+func (s *Service) HandlePcapUri(ctx context.Context, fname string) {
+	file, err := os.Open(fname)
 	if err != nil {
-		slog.Error("[DEBUG] Errore nel recupero flagid da MongoDB", "error", err, "flow_id", entry.Id)
-	} else {
-		
-		if len(flagidEntries) > 0 {
-			allFlagids := make([]string, 0, len(flagidEntries))
-			for _, f := range flagidEntries {
-				allFlagids = append(allFlagids, f.FlagId)
-			}
+		slog.Error("Failed to open PCAP file", "file", fname, "err", err)
+		return
+	}
+	defer file.Close()
 
-			
-			for _, flowItem := range entry.Flow {
-				if flowItem.Data == "" {
-					continue
-				}
-				
-				for _, flagidEntry := range flagidEntries {
-					if len(flagidEntry.FlagId) == 0 {
-						continue
-					}
-					
-					if contains(flowItem.Data, flagidEntry.FlagId) {
-						// Aggiungi il flagid alla lista se non c'è già
-						if !slices.Contains(entry.Flagids, flagidEntry.FlagId) {
-							entry.Flagids = append(entry.Flagids, flagidEntry.FlagId)
-						}
-						
-						// Crea il tag
-						tag := "flagid"
-						
-						// Aggiungi il tag se non c'è già
-						if !slices.Contains(entry.Tags, tag) {
-							entry.Tags = append(entry.Tags, tag)
-							
-						}
-					}
-				}
-			}
-		}
+	reader, err := pcapgo.NewReader(file)
+	if err != nil {
+		slog.Error("Failed to create PCAP reader", "file", fname, "err", err)
+		return
 	}
 
-	// Finally, insert the new entry
-	s.DB.InsertFlow(entry)
+	s.ProcessPcapHandle(ctx, reader, fname)
 }
 
+// FlushConnections closes and saves connections that are older than the configured timeouts.
 func (s *Service) FlushConnections() {
 	thresholdTcp := time.Now().Add(-s.ConnectionTcpTimeout)
 	thresholdUdp := time.Now().Add(-s.ConnectionUdpTimeout)
@@ -162,156 +131,241 @@ func (s *Service) FlushConnections() {
 	}
 }
 
-func (s *Service) ProcessPcapHandle(handle *pcapgo.Reader, fname string) {
+// ProcessPcapHandle processes a PCAP handle, reading packets and processing them.
+func (s *Service) ProcessPcapHandle(ctx context.Context, handle *pcapgo.Reader, fname string) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("Recovered from panic in ProcessPcapHandle", "error", r, "file", fname)
 		}
 	}()
 
+	// Check if the file has already been processed
+	exists, file := s.DB.GetPcap(fname)
 	processedCount := int64(0)
-	processedExists, processedPcap := s.DB.GetPcap(fname)
-	if processedExists {
-		processedCount = processedPcap.Position
-		slog.Info("Skipping already processed packets", "file", fname, "count", processedCount)
+	if exists {
+		if file.Finished {
+			slog.Info("PCAP file already processed", "file", fname)
+			return
+		}
+		processedCount = file.Position
+		slog.Info("skipping already processed packets", "file", fname, "count", processedCount)
 	}
 
-	var source *gopacket.PacketSource
+	source := s.setupPacketSource(handle)
+	s.FlushConnections()
+
+	count, lastFlush := int64(0), time.Now()
+	bytes := int64(0)
 	nodefrag := false
+
+	startTime := time.Now()
+
+	finished := true
+
+packetLoop:
+	for packet := range source.Packets() {
+		select {
+		case <-ctx.Done():
+			slog.Warn("context cancelled, stopping packet processing", "file", fname)
+			finished = false
+			break packetLoop
+		default:
+		}
+
+		count++
+		if count < processedCount+1 {
+			continue // skip already processed packets
+		}
+
+		data := packet.Data()
+		bytes += int64(len(data))
+		done := s.processPacket(packet, fname, nodefrag)
+		if done {
+			finished = false
+			break
+		}
+
+		if s.shouldFlushConnections(lastFlush) {
+			s.FlushConnections()
+			lastFlush = time.Now()
+		}
+	}
+
+	elapsed := time.Since(startTime)
+	avgPkts := float64(count) / elapsed.Seconds()
+	avgMBytes := float64(bytes) / elapsed.Seconds() / 1e6 // MB/s
+	slog.Info("Processed packets",
+		"count", count-processedCount,
+		"elapsed", elapsed,
+		"pkt/s", fmt.Sprintf("%.2f", avgPkts),
+		"MB/s", fmt.Sprintf("%.2f", avgMBytes),
+		"file", fname, "finished", finished,
+	)
+
+	s.DB.InsertPcap(db.PcapFile{
+		FileName: fname,
+		Position: count,
+		Finished: finished,
+	})
+}
+
+// checkProcessedCount returns the count of already processed packets for a given file.
+func (s *Service) checkProcessedCount(fname string) int64 {
+	exists, file := s.DB.GetPcap(fname)
+	if exists {
+		return file.Position
+	}
+	return 0
+}
+
+// setupPacketSource initializes the gopacket.PacketSource based on the link type.
+func (s *Service) setupPacketSource(handle *pcapgo.Reader) *gopacket.PacketSource {
 	linktype := handle.LinkType()
+	var source *gopacket.PacketSource
 	switch linktype {
 	case layers.LinkTypeIPv4:
 		source = gopacket.NewPacketSource(handle, layers.LayerTypeIPv4)
 	default:
 		source = gopacket.NewPacketSource(handle, linktype)
 	}
-
 	source.Lazy = s.TcpLazy
 	source.NoCopy = true
-
-	count := int64(0)
-	bytes := int64(0)
-	lastFlush := time.Now()
-
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-
-	s.FlushConnections()
-
-	for packet := range source.Packets() {
-		count++
-
-		// Skip packets that were already processed from this pcap
-		if count < processedCount+1 {
-			continue
-		}
-
-		data := packet.Data()
-		bytes += int64(len(data))
-		done := false
-
-		// defrag the IPv4 packet if required
-		// (TODO; IPv6 will not be defragmented)
-		ip4Layer := packet.Layer(layers.LayerTypeIPv4)
-		if !nodefrag && ip4Layer != nil {
-
-			ip4 := ip4Layer.(*layers.IPv4)
-			l := ip4.Length
-
-			newip4, err := s.Defragmenter.DefragIPv4(ip4)
-			if err != nil {
-				slog.Error("Error while de-fragmenting", "err", err)
-				return
-			} else if newip4 == nil {
-				continue // packet fragment, we don't have whole packet yet.
-			}
-
-			if newip4.Length != l {
-				pb, ok := packet.(gopacket.PacketBuilder)
-				if !ok {
-					panic("Not a PacketBuilder")
-				}
-				nextDecoder := newip4.NextLayerType()
-				nextDecoder.Decode(newip4.Payload, pb)
-			}
-		}
-
-		transport := packet.TransportLayer()
-		if transport == nil {
-			continue
-		}
-
-		switch transport.LayerType() {
-
-		case layers.LayerTypeTCP:
-			tcp := transport.(*layers.TCP)
-			flow := packet.NetworkLayer().NetworkFlow()
-			captureInfo := packet.Metadata().CaptureInfo
-			captureInfo.AncillaryData = []any{fname}
-			context := &Context{CaptureInfo: captureInfo}
-			s.AssemblerTcp.AssembleWithContext(flow, tcp, context)
-
-		case layers.LayerTypeUDP:
-			udp := transport.(*layers.UDP)
-			flow := packet.NetworkLayer().NetworkFlow()
-			captureInfo := packet.Metadata().CaptureInfo
-			s.AssemblerUdp.Assemble(flow, udp, &captureInfo, fname)
-
-		default:
-			slog.Warn("Unsupported transport layer", "layer", transport.LayerType().String(), "file", fname)
-		}
-
-		// Exit if ctx is done
-		select {
-		case <-signalChan:
-			slog.Warn("Caught SIGINT: aborting")
-			done = true
-		default:
-		}
-
-		if done {
-			break
-		}
-
-		// Try flushing connections here. When using PCAP-over-IP this is required, since it treats whole connection as one pcap.
-		// NOTE: PCAP-over-IP: pcapOpenOfflineFile is blocking so we need at least see some packets passing by to get here.
-		if s.FlushInterval != 0 && lastFlush.Add(s.FlushInterval).Unix() < time.Now().Unix() {
-			s.FlushConnections()
-			slog.Info("Processed packets", "count", count-processedCount, "file", fname)
-			lastFlush = time.Now()
-		}
-	}
-
-	slog.Info("Processed packets", "count", count-processedCount, "file", fname)
-	s.DB.InsertPcap(fname, count)
+	return source
 }
 
-func (s Service) HandlePcapUri(fname string) {
-	file, err := os.Open(fname)
-	if err != nil {
-		slog.Error("Failed to open PCAP file", "file", fname, "err", err)
+// processPacket handles a single packet: skipping, defragmentation, protocol dispatch (TCP/UDP), and error handling.
+// Returns true if processing should stop.
+func (s *Service) processPacket(packet gopacket.Packet, fname string, nodefrag bool) bool {
+	// defrag the IPv4 packet if required
+	ip4Layer := packet.Layer(layers.LayerTypeIPv4)
+	if !nodefrag && ip4Layer != nil {
+		ip4 := ip4Layer.(*layers.IPv4)
+		l := ip4.Length
+		newip4, err := s.Defragmenter.DefragIPv4(ip4)
+		if err != nil {
+			slog.Error("Error while de-fragmenting", "err", err)
+			return true
+		} else if newip4 == nil {
+			return false // packet fragment, we don't have whole packet yet.
+		}
+		if newip4.Length != l {
+			pb, ok := packet.(gopacket.PacketBuilder)
+			if !ok {
+				panic("Not a PacketBuilder")
+			}
+			nextDecoder := newip4.NextLayerType()
+			nextDecoder.Decode(newip4.Payload, pb)
+		}
+	}
+
+	transport := packet.TransportLayer()
+	if transport == nil {
+		return false
+	}
+
+	switch transport.LayerType() {
+	case layers.LayerTypeTCP:
+		tcp := transport.(*layers.TCP)
+		flow := packet.NetworkLayer().NetworkFlow()
+		captureInfo := packet.Metadata().CaptureInfo
+		captureInfo.AncillaryData = []any{fname}
+		context := &Context{CaptureInfo: captureInfo}
+		s.AssemblerTcp.AssembleWithContext(flow, tcp, context)
+	case layers.LayerTypeUDP:
+		udp := transport.(*layers.UDP)
+		flow := packet.NetworkLayer().NetworkFlow()
+		captureInfo := packet.Metadata().CaptureInfo
+		s.AssemblerUdp.Assemble(flow, udp, &captureInfo, fname)
+	default:
+		slog.Warn("Unsupported transport layer", "layer", transport.LayerType().String(), "file", fname)
+	}
+	return false
+}
+
+// shouldFlushConnections determines if it's time to flush connections based on the interval.
+func (s *Service) shouldFlushConnections(lastFlush time.Time) bool {
+	return s.FlushInterval != 0 && lastFlush.Add(s.FlushInterval).Unix() < time.Now().Unix()
+}
+
+// TODO; FIXME; RDJ; this is kinda gross, but this is PoC level code
+func (s *Service) reassemblyCallback(entry db.FlowEntry) {
+	s.parseAndTagHttp(&entry)
+	s.applyFlagRegexTags(&entry)
+	s.searchAndTagFlagIds(&entry)
+	s.insertFlowEntry(&entry)
+}
+
+// parseAndTagHttp parses HTTP flows and decodes encodings to plaintext.
+func (s *Service) parseAndTagHttp(entry *db.FlowEntry) {
+	s.ParseHttpFlow(entry)
+}
+
+// applyFlagRegexTags applies regex-based tags to the flow entry.
+func (s *Service) applyFlagRegexTags(entry *db.FlowEntry) {
+	if s.FlagRegex == nil {
 		return
 	}
-	defer file.Close()
+	ApplyFlagTags(entry, *s.FlagRegex)
+}
 
-	reader, err := pcapgo.NewReader(file)
+// searchAndTagFlagIds searches for flag IDs in the payload and tags the entry accordingly.
+func (s *Service) searchAndTagFlagIds(entry *db.FlowEntry) {
+	flagidEntries, err := s.Config.DB.GetFlagIds()
 	if err != nil {
-		slog.Error("Failed to create PCAP reader", "file", fname, "err", err)
+		slog.Error("could not get flagid entries", "err", err)
+		return
+	}
+	if len(flagidEntries) == 0 {
 		return
 	}
 
-	s.ProcessPcapHandle(reader, fname)
+	for _, flowItem := range entry.Flow {
+		if flowItem.Data == "" {
+			continue
+		}
+		for _, flagidEntry := range flagidEntries {
+			if len(flagidEntry.FlagId) == 0 {
+				continue
+			}
+			if contains(flowItem.Data, flagidEntry.FlagId) {
+				// Add the flagid if not already present
+				if !slices.Contains(entry.Flagids, flagidEntry.FlagId) {
+					entry.Flagids = append(entry.Flagids, flagidEntry.FlagId)
+				}
+				// Add the tag if not already present
+				tag := "flagid"
+				if !slices.Contains(entry.Tags, tag) {
+					entry.Tags = append(entry.Tags, tag)
+				}
+			}
+		}
+	}
+}
+
+// insertFlowEntry inserts the processed flow entry into the database.
+func (s *Service) insertFlowEntry(entry *db.FlowEntry) {
+	s.flowChannel <- *entry // Send to channel for processing
+}
+
+func (s *Service) insertFlows() error {
+	const maxWorkers = 100
+
+	pool, err := ants.NewPool(maxWorkers, ants.WithPreAlloc(true))
+	if err != nil {
+		return fmt.Errorf("failed to create goroutine pool: %w", err)
+	}
+
+	for entry := range s.flowChannel {
+		pool.Submit(func() {
+			s.DB.InsertFlow(entry)
+		})
+	}
+
+	pool.Release()
+	return nil
 }
 
 // contains returns true if substr is in s
 func contains(s, substr string) bool {
 	return len(substr) > 0 && len(s) > 0 && strings.Contains(s, substr)
-}
-
-// getFlagIds è un helper locale che chiama direttamente il metodo del database
-func getFlagIds(database db.Database) ([]db.FlagIdEntry, error) {
-	if mongoDB, ok := database.(interface{ GetFlagIds() ([]db.FlagIdEntry, error) }); ok {
-		return mongoDB.GetFlagIds()
-	}
-	return nil, fmt.Errorf("database does not support GetRecentFlagIds")
 }
