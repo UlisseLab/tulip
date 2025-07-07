@@ -17,7 +17,6 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -280,13 +279,15 @@ func (db MongoDatabase) InsertFlow(flow FlowEntry) {
 		flowItem := &flow.Flow[idx]
 
 		flowItem.Raw = []byte(flowItem.Data)
+
 		// filter the data string down to only printable characters
-		flowItem.Data = strings.Map(func(r rune) rune {
-			if r < 128 {
-				return r
+		newRaw := make([]byte, 0, len(flowItem.Data))
+		for i := 0; i < len(flowItem.Data); i++ {
+			if flowItem.Data[i] >= 32 && flowItem.Data[i] <= 126 {
+				newRaw = append(newRaw, flowItem.Data[i])
 			}
-			return -1
-		}, flowItem.Data)
+		}
+		flowItem.Raw = newRaw
 	}
 
 	if len(flow.Fingerprints) > 0 {
