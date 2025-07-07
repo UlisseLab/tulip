@@ -87,7 +87,7 @@ in the `.env` file.
 
 The higher the rotation interval, the more delay there will be before the traffic is visible in Tulip. The default is 30 sec, which should be sufficient for most CTFs.
 
-> [!WARN]
+> [!WARNING]
 > The assembler maintains the state of TCP connections for only one PCAP file at a time. Therefore, if the rotation interval is set too low, the assembler might fail to correlate packets into a coherent flow.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for more information on the internal workings of Tulip.
