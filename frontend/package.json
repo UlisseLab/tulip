@@ -48,7 +48,7 @@
     "tailwindcss": "^4.1.10",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.1",
-    "vite": "^6.3.5"
+    "vite": "^7.0.2"
   },
   "packageManager": "yarn@4.9.2"
 }
