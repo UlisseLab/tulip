@@ -128,7 +128,7 @@ func handlePcapConnection(conn net.Conn, tempDir, destDir string, rotateInterval
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	rw := NewRotatingWriterPCAP(conn, tempDir, destDir, clientID, rotateInterval)
+	rw := NewRotatingPCAPWriter(conn, tempDir, destDir, clientID, rotateInterval)
 	rw.Start(ctx)
 
 	slog.Info("Finished ingesting PCAP connection", slog.String("client", clientAddr))

@@ -19,8 +19,11 @@ import (
 	"github.com/google/gopacket/pcapgo"
 )
 
-// RotatingWriterPCAP rotates files every interval, always writing a PCAP header using gopacket/pcapgo.Writer.
-type RotatingWriterPCAP struct {
+// RotatingPCAPWriter captures packets from a network connection and writes them to PCAP files.
+//
+// It writes packets to files in a temporary directory, then, after interval duration, it rotates the file
+// by closing it, moving it to a destination directory, and creating a new file.
+type RotatingPCAPWriter struct {
 	conn     net.Conn
 	tempDir  string
 	destDir  string
@@ -28,9 +31,13 @@ type RotatingWriterPCAP struct {
 	interval time.Duration
 }
 
-// NewRotatingWriterPCAP creates a new rotatingWriterPCAP.
-func NewRotatingWriterPCAP(conn net.Conn, tempDir, destDir, clientID string, interval time.Duration) *RotatingWriterPCAP {
-	return &RotatingWriterPCAP{
+// NewRotatingPCAPWriter creates a new rotatingWriterPCAP.
+func NewRotatingPCAPWriter(
+	conn net.Conn,
+	tempDir, destDir, clientID string,
+	interval time.Duration,
+) *RotatingPCAPWriter {
+	return &RotatingPCAPWriter{
 		conn:     conn,
 		tempDir:  tempDir,
 		destDir:  destDir,
@@ -40,7 +47,7 @@ func NewRotatingWriterPCAP(conn net.Conn, tempDir, destDir, clientID string, int
 }
 
 // Start begins reading packets from the connection and writing them to rotated PCAP/PCAPNG files.
-func (rw *RotatingWriterPCAP) Start(ctx context.Context) error {
+func (rw *RotatingPCAPWriter) Start(ctx context.Context) error {
 	var (
 		currentReader *pcapgo.Reader
 		currentFile   *os.File
@@ -128,7 +135,7 @@ rotationLoop:
 }
 
 // moveToDest moves a file from the temp directory to the destination directory.
-func (rw *RotatingWriterPCAP) moveToDest(srcPath string) {
+func (rw *RotatingPCAPWriter) moveToDest(srcPath string) {
 	base := filepath.Base(srcPath)
 	destPath := filepath.Join(rw.destDir, base)
 	err := os.Rename(srcPath, destPath)
