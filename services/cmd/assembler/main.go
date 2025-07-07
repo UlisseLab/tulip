@@ -14,7 +14,10 @@ package main
 
 import (
 	"context"
+	"log"
 	"log/slog"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -48,6 +51,7 @@ func init() {
 	rootCmd.Flags().Bool("experimental", false, "Enable experimental features")
 	rootCmd.Flags().Bool("nonstrict", false, "Enable non-strict mode for TCP stream assembly")
 	rootCmd.Flags().String("connection-timeout", "30s", "Connection timeout for both TCP and UDP flows (e.g. 30s, 1m)")
+	rootCmd.Flags().Bool("pperf", false, "Enable performance profiling (experimental)")
 
 	viper.BindPFlag("mongo", rootCmd.Flags().Lookup("mongo"))
 	viper.BindPFlag("watch-dir", rootCmd.Flags().Lookup("watch-dir"))
@@ -57,6 +61,7 @@ func init() {
 	viper.BindPFlag("experimental", rootCmd.Flags().Lookup("experimental"))
 	viper.BindPFlag("nonstrict", rootCmd.Flags().Lookup("nonstrict"))
 	viper.BindPFlag("connection-timeout", rootCmd.Flags().Lookup("connection-timeout"))
+	viper.BindPFlag("pperf", rootCmd.Flags().Lookup("pperf"))
 
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -80,6 +85,13 @@ func runAssembler(cmd *cobra.Command, args []string) {
 	experimental := viper.GetBool("experimental")
 	nonstrict := viper.GetBool("nonstrict")
 	connectionTimeoutStr := viper.GetString("connection-timeout")
+	pperf := viper.GetBool("pperf")
+
+	if pperf {
+		go func() {
+			log.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
+	}
 
 	// Connect to MongoDB
 	dbString := "mongodb://" + mongodb
