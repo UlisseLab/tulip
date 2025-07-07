@@ -5,27 +5,16 @@
 package main
 
 import (
-	"context"
 	"log/slog"
-	"net"
 	"os"
 	"strings"
 	"time"
+	"tulip/pkg/ingestor"
 
 	"github.com/lmittmann/tint"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-func sanitizeFilename(s string) string {
-	r := []rune(s)
-	for i, c := range r {
-		if c == ':' || c == '/' || c == '\\' {
-			r[i] = '_'
-		}
-	}
-	return string(r)
-}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -99,37 +88,15 @@ func runIngestor(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	ln, err := net.Listen("tcp", cfgListenAddr)
+	ing := &ingestor.Ingestor{
+		TmpDir:         cfgTempDir,
+		DestDir:        cfgDestDir,
+		RotateInterval: cfgRotateInterval,
+	}
+
+	err := ing.Serve(cfgListenAddr)
 	if err != nil {
-		slog.Error("Failed to start TCP server", slog.Any("err", err))
+		slog.Error("ingestor stopped with error", slog.Any("err", err))
 		os.Exit(1)
 	}
-	defer ln.Close()
-
-	slog.Info("Listening for incoming PCAP connections...", slog.String("address", cfgListenAddr))
-
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			slog.Error("Failed to accept connection", slog.Any("err", err))
-			continue
-		}
-		go handlePcapConnection(conn, cfgTempDir, cfgDestDir, cfgRotateInterval)
-	}
-}
-
-// handlePcapConnection handles a single incoming PCAP-over-IP connection.
-func handlePcapConnection(conn net.Conn, tempDir, destDir string, rotateInterval time.Duration) {
-	defer conn.Close()
-	clientAddr := conn.RemoteAddr().String()
-	clientID := sanitizeFilename(clientAddr)
-	slog.Info("Accepted new PCAP connection", slog.String("client", clientAddr))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	rw := NewRotatingPCAPWriter(conn, tempDir, destDir, clientID, rotateInterval)
-	rw.Start(ctx)
-
-	slog.Info("Finished ingesting PCAP connection", slog.String("client", clientAddr))
 }

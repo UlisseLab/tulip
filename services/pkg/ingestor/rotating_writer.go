@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
-// SPDX-FileCopyrightText: 2025 Eyad Issa <eyadlorenzo@gmail.com>
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-package main
+package ingestor
 
 import (
 	"context"
@@ -110,12 +109,9 @@ rotationLoop:
 					break rotationLoop
 				}
 
-				ci := pkt.Metadata().CaptureInfo
-				data := pkt.Data()
-
-				err := currentWriter.WritePacket(ci, data)
+				err := copyPkt(pkt, currentWriter)
 				if err != nil {
-					return fmt.Errorf("failed to write packet: %w", err)
+					return fmt.Errorf("failed to copy packet: %w", err)
 				}
 			}
 		}
@@ -168,4 +164,11 @@ func copyFile(srcPath, destPath string) error {
 	}
 
 	return nil
+}
+
+func copyPkt(src gopacket.Packet, dst *pcapgo.Writer) error {
+	ci := src.Metadata().CaptureInfo
+	data := src.Data()
+
+	return dst.WritePacket(ci, data)
 }
