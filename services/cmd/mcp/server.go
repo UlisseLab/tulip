@@ -34,8 +34,6 @@ func main() {
 		return
 	}
 
-
-
 	// Initialize MongoDB connection using pkg/db
 	mongoURI := config.MongoServer()
 	mdb, err := db.ConnectMongo(mongoURI)

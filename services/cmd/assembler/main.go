@@ -13,12 +13,11 @@
 package main
 
 import (
+	"log/slog"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"log/slog"
-	"os"
 	"time"
 
 	"tulip/pkg/assembler"
