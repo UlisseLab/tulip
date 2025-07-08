@@ -12,7 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/lmittmann/tint v1.1.2
-	github.com/mark3labs/mcp-go v0.32.0
+	github.com/mark3labs/mcp-go v0.33.0
 	github.com/panjf2000/ants/v2 v2.11.3
 	github.com/redis/go-redis/v9 v9.10.0
 	github.com/spf13/cobra v1.8.0
