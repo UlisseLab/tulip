@@ -8,9 +8,8 @@ package assembler
 
 import (
 	"regexp"
+	"slices"
 	"tulip/pkg/db"
-
-	"golang.org/x/exp/slices"
 )
 
 // Apply flag in/flag out tags to the entire flow.
