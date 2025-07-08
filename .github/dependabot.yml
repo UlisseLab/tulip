@@ -11,12 +11,7 @@ updates:
       interval: "weekly"
 
   - package-ecosystem: gomod
-    directory: services/go-importer
-    schedule:
-      interval: "weekly"
-
-  - package-ecosystem: pip
-    directory: services/api
+    directory: services/
     schedule:
       interval: "weekly"
 
