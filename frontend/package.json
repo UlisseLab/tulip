@@ -36,7 +36,7 @@
     "@tailwindcss/vite": "^4.1.11",
     "@tsconfig/vite-react": "^6.3.6",
     "@types/color": "^4.2.0",
-    "@types/node": "^24.0.10",
+    "@types/node": "^24.0.13",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
