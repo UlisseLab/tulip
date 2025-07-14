@@ -14,7 +14,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.6",
     "@heroicons/react": "^2.2.0",
     "@reduxjs/toolkit": "^2.8.2",
-    "apexcharts": "^4.7.0",
+    "apexcharts": "^5.2.0",
     "buffer": "^6.0.3",
     "classnames": "^2.5.1",
     "color": "^5.0.0",
