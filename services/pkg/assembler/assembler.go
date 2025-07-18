@@ -18,8 +18,6 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
-	"slices"
-	"strings"
 	"time"
 	"tulip/pkg/db"
 
@@ -291,7 +289,6 @@ func (s *Service) shouldFlushConnections(lastFlush time.Time) bool {
 func (s *Service) reassemblyCallback(entry db.FlowEntry) {
 	s.parseAndTagHttp(&entry)
 	s.applyFlagRegexTags(&entry)
-	s.searchAndTagFlagIds(&entry)
 	s.insertFlowEntry(&entry)
 }
 
@@ -306,40 +303,6 @@ func (s *Service) applyFlagRegexTags(entry *db.FlowEntry) {
 		return
 	}
 	ApplyFlagTags(entry, *s.FlagRegex)
-}
-
-// searchAndTagFlagIds searches for flag IDs in the payload and tags the entry accordingly.
-func (s *Service) searchAndTagFlagIds(entry *db.FlowEntry) {
-	flagidEntries, err := s.Config.DB.GetFlagIds()
-	if err != nil {
-		slog.Error("could not get flagid entries", "err", err)
-		return
-	}
-	if len(flagidEntries) == 0 {
-		return
-	}
-
-	for _, flowItem := range entry.Flow {
-		if flowItem.Data == "" {
-			continue
-		}
-		for _, flagidEntry := range flagidEntries {
-			if len(flagidEntry.FlagId) == 0 {
-				continue
-			}
-			if contains(flowItem.Data, flagidEntry.FlagId) {
-				// Add the flagid if not already present
-				if !slices.Contains(entry.Flagids, flagidEntry.FlagId) {
-					entry.Flagids = append(entry.Flagids, flagidEntry.FlagId)
-				}
-				// Add the tag if not already present
-				tag := "flagid"
-				if !slices.Contains(entry.Tags, tag) {
-					entry.Tags = append(entry.Tags, tag)
-				}
-			}
-		}
-	}
 }
 
 // insertFlowEntry inserts the processed flow entry into the database.
@@ -363,9 +326,4 @@ func (s *Service) insertFlows() error {
 
 	pool.Release()
 	return nil
-}
-
-// contains returns true if substr is in s
-func contains(s, substr string) bool {
-	return len(substr) > 0 && len(s) > 0 && strings.Contains(s, substr)
 }
