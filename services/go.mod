@@ -14,7 +14,7 @@ require (
 	github.com/lmittmann/tint v1.1.2
 	github.com/mark3labs/mcp-go v0.36.0
 	github.com/panjf2000/ants/v2 v2.11.3
-	github.com/redis/go-redis/v9 v9.11.0
+	github.com/redis/go-redis/v9 v9.12.1
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/tidwall/gjson v1.18.0
