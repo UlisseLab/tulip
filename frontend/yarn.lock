@@ -1212,10 +1212,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tsconfig/vite-react@npm:^6.3.6":
-  version: 6.3.6
-  resolution: "@tsconfig/vite-react@npm:6.3.6"
-  checksum: 10c0/cceb2561f0c488ec59fb1a6919e75983a277fae8c23f770af6e8a7ce8495392269f51ce19e597e0798e1283a3c00e561eecf090b9abd610ccadce5e07fb524b5
+"@tsconfig/vite-react@npm:^7.0.1":
+  version: 7.0.1
+  resolution: "@tsconfig/vite-react@npm:7.0.1"
+  checksum: 10c0/9980067dc3cd86cd439a4b87056cbc2480bf6ad25e53e5300234b1b9409058a6c933bfc6d385b1eb7f832da973f74ac88a406bc6f5e115a7c4a337c15739d515
   languageName: node
   linkType: hard
 
@@ -2584,7 +2584,7 @@ __metadata:
     "@heroicons/react": "npm:^2.2.0"
     "@reduxjs/toolkit": "npm:^2.8.2"
     "@tailwindcss/vite": "npm:^4.1.11"
-    "@tsconfig/vite-react": "npm:^6.3.6"
+    "@tsconfig/vite-react": "npm:^7.0.1"
     "@types/color": "npm:^4.2.0"
     "@types/node": "npm:^24.0.10"
     "@types/react": "npm:^19.1.8"
