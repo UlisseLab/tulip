@@ -440,6 +440,8 @@ func buildFlowQuery(opts *FindFlowsOptions) bson.M {
 
 	if opts.DstPort > 0 {
 		query["dst_port"] = opts.DstPort
+	} else if len(opts.ExcludePorts) > 0 {
+		query["dst_port"] = bson.M{"$nin": opts.ExcludePorts}
 	}
 	if opts.DstIp != "" {
 		query["dst_ip"] = opts.DstIp

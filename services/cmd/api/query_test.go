@@ -33,8 +33,8 @@ func (m *mockDB) GetFlows(ctx context.Context, opts *db.FindFlowsOptions) ([]db.
 func (m *mockDB) GetSignaturesBatch(ctx context.Context, ids []string) ([]db.SuricataSig, error) {
 	return nil, nil
 }
-func (m *mockDB) InsertFlows(context.Context, []db.FlowEntry) error            { return nil }
-func (m *mockDB) CountFlows(context.Context, bson.D) (int64, error)            { return 0, nil }
+func (m *mockDB) InsertFlows(context.Context, []db.FlowEntry) error { return nil }
+func (m *mockDB) CountFlows(context.Context, bson.D) (int64, error) { return 0, nil }
 func (m *mockDB) CountFlowsByOpts(context.Context, *db.FindFlowsOptions) (int64, error) {
 	return 0, nil
 }

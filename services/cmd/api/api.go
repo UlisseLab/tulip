@@ -20,8 +20,6 @@ import (
 	"tulip/pkg/db"
 
 	"github.com/labstack/echo/v4"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Router holds dependencies for handlers
@@ -71,8 +69,6 @@ func (api *Router) getTickInfo(c echo.Context) error {
 
 func (api *Router) query(c echo.Context) error {
 
-	// TODO: this is horrible, the API layer should not be aware of the database structure
-
 	type flowQueryRequest struct {
 		IncludeTags  []string `json:"includeTags"`
 		ExcludeTags  []string `json:"excludeTags"`
@@ -94,157 +90,41 @@ func (api *Router) query(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, apiError{Error: "Invalid request format"})
 	}
 
-	filter := bson.D{}
-
-	// Handle "flow.data" regex filter
-	if req.FlowData != "" {
-		filter = append(filter, bson.E{
-			Key: "flow.data",
-			Value: bson.M{
-				"$regex":   req.FlowData,
-				"$options": "i", // Case-insensitive regex
-			},
-		})
-	}
-
-	// Handle "dst_ip"
-	if req.DstIp != "" {
-		filter = append(filter, bson.E{Key: "dst_ip", Value: req.DstIp})
-	}
-
-	// Handle "dst_port"
-	if req.DstPort != 0 {
-		if req.DstPort == -1 {
-			// Remove dst_ip
-			for i, e := range filter {
-				if e.Key == "dst_ip" {
-					filter = append(filter[:i], filter[i+1:]...)
-					break
-				}
-			}
-
-			// Exclude all service ports
-			ninPorts := []int{}
-			for _, svc := range api.Config.Services {
-				if svc.Port != 0 {
-					ninPorts = append(ninPorts, svc.Port)
-				}
-			}
-			filter = append(filter, bson.E{Key: "dst_port", Value: bson.M{"$nin": ninPorts}})
-		} else {
-			filter = append(filter, bson.E{Key: "dst_port", Value: req.DstPort})
-		}
-	}
-
-	// Handle time range
-	if req.FromTime != 0 && req.ToTime != 0 {
-		filter = append(filter, bson.E{Key: "time", Value: bson.D{
-			{Key: "$gte", Value: req.FromTime},
-			{Key: "$lt", Value: req.ToTime},
-		}})
-	}
-
-	// Handle tags
-	tagQueries := bson.M{}
-
-	if len(req.IncludeTags) > 0 {
-		tagQueries["$all"] = req.IncludeTags
-	}
-
-	if len(req.ExcludeTags) > 0 {
-		tagQueries["$nin"] = req.ExcludeTags
-	}
-
-	if len(tagQueries) > 0 {
-		filter = append(filter, bson.E{Key: "tags", Value: tagQueries})
-	}
-
-	type apiFlowEntry struct {
-		Id           primitive.ObjectID `json:"_id"`         // MongoDB unique identifier
-		SrcPort      int                `json:"src_port"`    // Source port
-		DstPort      int                `json:"dst_port"`    // Destination port
-		SrcIp        string             `json:"src_ip"`      // Source IP address
-		DstIp        string             `json:"dst_ip"`      // Destination IP address
-		Time         int                `json:"time"`        // Timestamp (epoch)
-		Duration     int                `json:"duration"`    // Duration in milliseconds
-		Num_packets  int                `json:"num_packets"` // Number of packets
-		Blocked      bool               `json:"blocked"`
-		Filename     string             `json:"filename"` // Name of the pcap file this flow was captured in
-		Fingerprints []uint32           `json:"fingerprints"`
-		Signatures   []db.SuricataSig   `json:"signatures"` // Signatures matched by this flow
-		Flow         []db.FlowItem      `json:"flow"`
-		Tags         []string           `json:"tags"`    // Tags associated with this flow, e.g. "starred", "tcp", "udp", "blocked"
-		Size         int                `json:"size"`    // Size of the flow in bytes
-		Flags        []string           `json:"flags"`   // Flags contained in the flow
-		Flagids      []string           `json:"flagids"` // Flag IDs associated with this flow
-	}
-
-	// Convert bson.D filter to GetFlowsOptions
 	opts := &db.FindFlowsOptions{
+		FromTime:     req.FromTime,
+		ToTime:       req.ToTime,
+		IncludeTags:  req.IncludeTags,
+		ExcludeTags:  req.ExcludeTags,
+		DstIp:        req.DstIp,
+		FlowData:     req.FlowData,
 		Limit:        req.Limit,
 		Offset:       req.Offset,
 		Fingerprints: req.Fingerprints,
 	}
 
-	// Set default limit if not specified
 	if opts.Limit <= 0 {
 		opts.Limit = 50
 	}
 
-	// Parse filter to populate options
-	for _, elem := range filter {
-		switch elem.Key {
-		case "dst_ip":
-			if str, ok := elem.Value.(string); ok {
-				opts.DstIp = str
-			}
-		case "dst_port":
-			if port, ok := elem.Value.(int); ok {
-				opts.DstPort = port
-			}
-		case "time":
-			if timeRange, ok := elem.Value.(bson.D); ok {
-				for _, timeElem := range timeRange {
-					switch timeElem.Key {
-					case "$gte":
-						if val, ok := timeElem.Value.(int64); ok {
-							opts.FromTime = val
-						}
-					case "$lt":
-						if val, ok := timeElem.Value.(int64); ok {
-							opts.ToTime = val
-						}
-					}
-				}
-			}
-		case "tags":
-			if tagQuery, ok := elem.Value.(bson.M); ok {
-				if all, exists := tagQuery["$all"]; exists {
-					if tags, ok := all.([]string); ok {
-						opts.IncludeTags = tags
-					}
-				}
-				if nin, exists := tagQuery["$nin"]; exists {
-					if tags, ok := nin.([]string); ok {
-						opts.ExcludeTags = tags
-					}
-				}
-			}
-		case "flow.data":
-			if regexQuery, ok := elem.Value.(bson.M); ok {
-				if regex, exists := regexQuery["$regex"]; exists {
-					if str, ok := regex.(string); ok {
-						opts.FlowData = str
-					}
-				}
+	// DstPort == -1 means "exclude all known service ports" (show non-service traffic)
+	if req.DstPort == -1 {
+		excludePorts := make([]int, 0, len(api.Config.Services))
+		for _, svc := range api.Config.Services {
+			if svc.Port != 0 {
+				excludePorts = append(excludePorts, svc.Port)
 			}
 		}
+		opts.ExcludePorts = excludePorts
+	} else if req.DstPort != 0 {
+		opts.DstPort = req.DstPort
 	}
 
-	slog.Info("Querying flows",
-		slog.Any("filter", filter),
-		slog.Any("options", opts),
-	)
+	type apiFlowEntry struct {
+		db.FlowEntry
+		Signatures []db.SuricataSig `json:"signatures"` // Signatures matched by this flow
+	}
+
+	slog.Info("Querying flows", slog.Any("options", opts))
 
 	results, err := api.DB.GetFlows(c.Request().Context(), opts)
 	if err != nil {
@@ -287,24 +167,7 @@ func (api *Router) query(c echo.Context) error {
 
 	apiResults := make([]apiFlowEntry, len(results))
 	for i, flow := range results {
-		res := apiFlowEntry{
-			Id:           flow.Id,
-			SrcPort:      flow.SrcPort,
-			DstPort:      flow.DstPort,
-			SrcIp:        flow.SrcIp,
-			DstIp:        flow.DstIp,
-			Time:         flow.Time,
-			Duration:     flow.Duration,
-			Num_packets:  flow.NumPackets,
-			Blocked:      flow.Blocked,
-			Filename:     flow.Filename,
-			Fingerprints: flow.Fingerprints,
-			Flow:         flow.Flow,
-			Tags:         flow.Tags,
-			Size:         flow.Size,
-			Flags:        flow.Flags,
-			Flagids:      flow.Flagids,
-		}
+		res := apiFlowEntry{FlowEntry: flow}
 
 		res.Signatures = make([]db.SuricataSig, 0, len(flow.Suricata))
 		for _, sigID := range flow.Suricata {

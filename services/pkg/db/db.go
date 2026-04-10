@@ -69,6 +69,7 @@ type FindFlowsOptions struct {
 	IncludeTags  []string
 	ExcludeTags  []string
 	DstPort      int
+	ExcludePorts []int // Exclude flows matching any of these destination ports
 	DstIp        string
 	SrcPort      int
 	SrcIp        string
