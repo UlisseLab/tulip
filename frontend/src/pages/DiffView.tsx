@@ -243,6 +243,25 @@ export function DiffView() {
   const firstFlowId = searchParams.get(FIRST_DIFF_KEY);
   const secondFlowId = searchParams.get(SECOND_DIFF_KEY);
 
+  const { data: firstFlow, isLoading: firstFlowLoading } = useGetFlowQuery(
+    firstFlowId!,
+    {
+      skip: firstFlowId === null,
+    },
+  );
+
+  const { data: secondFlow, isLoading: secondFlowLoading } = useGetFlowQuery(
+    secondFlowId!,
+    {
+      skip: secondFlowId === null,
+    },
+  );
+
+  const [displayOption, setDisplayOption] = useState(() =>
+    deriveDisplayMode(firstFlow!, secondFlow!),
+  );
+  const [splitView, setSplitView] = useState(true);
+
   // If either flow id is not provided, we skip the query
   if (firstFlowId === null || secondFlowId === null) {
     return (
@@ -268,29 +287,6 @@ export function DiffView() {
         </div>
       </div>
     );
-  }
-
-  const { data: firstFlow, isLoading: firstFlowLoading } = useGetFlowQuery(
-    firstFlowId!,
-    {
-      skip: firstFlowId === null,
-    },
-  );
-
-  const { data: secondFlow, isLoading: secondFlowLoading } = useGetFlowQuery(
-    secondFlowId!,
-    {
-      skip: secondFlowId === null,
-    },
-  );
-
-  const [displayOption, setDisplayOption] = useState(() =>
-    deriveDisplayMode(firstFlow!, secondFlow!),
-  );
-  const [splitView, setSplitView] = useState(true);
-
-  if (firstFlowId === null || secondFlowId === null) {
-    return <div>Invalid flow id</div>;
   }
 
   if (firstFlowLoading || secondFlowLoading) {
