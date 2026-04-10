@@ -228,6 +228,14 @@ func (db *mongoDb) ConfigureIndexes() error {
 		{Keys: bson.D{{Key: "data", Value: "text"}}},
 		// port combo index (traffic correlation)
 		{Keys: bson.D{{Key: "src_port", Value: 1}, {Key: "dst_port", Value: 1}}},
+		// compound index for enricher lookups (AddSignatureToFlow / AddTagsToFlow 5-tuple + time window)
+		{Keys: bson.D{
+			{Key: "src_ip", Value: 1},
+			{Key: "dst_ip", Value: 1},
+			{Key: "src_port", Value: 1},
+			{Key: "dst_port", Value: 1},
+			{Key: "time", Value: 1},
+		}},
 	})
 
 	if err != nil {
