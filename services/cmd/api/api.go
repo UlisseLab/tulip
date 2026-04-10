@@ -309,7 +309,7 @@ func (api *Router) query(c echo.Context) error {
 }
 
 func (api *Router) getTags(c echo.Context) error {
-	tags, err := api.DB.GetTagList()
+	tags, err := api.DB.GetTagList(c.Request().Context())
 	if err != nil {
 		slog.Error("Failed to fetch tags", slog.Any("err", err))
 		return c.JSON(http.StatusInternalServerError, apiError{"Could not fetch tags. See server logs for details."})
@@ -319,7 +319,7 @@ func (api *Router) getTags(c echo.Context) error {
 
 func (api *Router) getSignature(c echo.Context) error {
 	id := c.Param("id")
-	sig, err := api.DB.GetSignature(id)
+	sig, err := api.DB.GetSignature(c.Request().Context(), id)
 	if err != nil {
 		slog.Error("Failed to fetch signature", slog.String("id", id), slog.Any("err", err))
 		return c.JSON(http.StatusInternalServerError, apiError{"Could not fetch signature. See server logs for details."})
@@ -331,7 +331,7 @@ func (api *Router) setStar(c echo.Context) error {
 	flowID := c.Param("flow_id")
 	starToSet := c.Param("star_to_set")
 	star := starToSet != "0"
-	err := api.DB.SetStar(flowID, star)
+	err := api.DB.SetStar(c.Request().Context(), flowID, star)
 	if err != nil {
 		slog.Error("Failed to set star", slog.String("flow_id", flowID), slog.Any("err", err))
 		return c.JSON(http.StatusInternalServerError, apiError{"Could not set star. See server logs for details."})
@@ -363,7 +363,7 @@ func (api *Router) getFlagRegex(c echo.Context) error {
 func (api *Router) getFlowDetail(c echo.Context) error {
 	id := c.Param("id")
 
-	flow, err := api.DB.GetFlowDetail(id)
+	flow, err := api.DB.GetFlowDetail(c.Request().Context(), id)
 	if err != nil {
 		slog.Error("Failed to fetch flow detail", slog.String("id", id), slog.Any("err", err))
 		return c.JSON(http.StatusInternalServerError, apiError{"Could not fetch flow detail. See server logs for details."})
@@ -384,7 +384,7 @@ func (api *Router) convertToSinglePythonRequest(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "Invalid request format")
 	}
 
-	flow, err := api.DB.GetFlowDetail(req.Id)
+	flow, err := api.DB.GetFlowDetail(c.Request().Context(), req.Id)
 	if err != nil || flow == nil {
 		return c.String(http.StatusBadRequest, "Invalid flow id")
 	}
@@ -410,7 +410,7 @@ func (api *Router) convertToPythonRequests(c echo.Context) error {
 	tokenize, _ := strconv.ParseBool(c.QueryParam("tokenize"))
 	useSession, _ := strconv.ParseBool(c.QueryParam("use_requests_session"))
 
-	flow, err := api.DB.GetFlowDetail(id)
+	flow, err := api.DB.GetFlowDetail(c.Request().Context(), id)
 	if err != nil || flow == nil {
 		return c.String(http.StatusBadRequest, "Invalid flow: Invalid flow id")
 	}
@@ -425,7 +425,7 @@ func (api *Router) convertToPythonRequests(c echo.Context) error {
 
 func (api *Router) convertToPwn(c echo.Context) error {
 	id := c.Param("id")
-	flow, err := api.DB.GetFlowDetail(id)
+	flow, err := api.DB.GetFlowDetail(c.Request().Context(), id)
 	if err != nil || flow == nil {
 		return c.String(http.StatusBadRequest, "Invalid flow: Invalid flow id")
 	}

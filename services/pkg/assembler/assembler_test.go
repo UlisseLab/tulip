@@ -19,22 +19,26 @@ import (
 
 type NoopDb struct{}
 
-func (n *NoopDb) ConfigureDatabase() error                                { return nil }
-func (n *NoopDb) GetTagList() ([]string, error)                           { return nil, nil }
-func (n *NoopDb) GetSignature(string) (db.SuricataSig, error)             { return db.SuricataSig{}, nil }
-func (n *NoopDb) SetStar(string, bool) error                              { return nil }
-func (n *NoopDb) GetFlowDetail(string) (*db.FlowEntry, error)             { return nil, nil }
-func (n *NoopDb) GetPcap(string) (bool, db.PcapFile)                      { return false, db.PcapFile{} }
-func (n *NoopDb) InsertPcap(db.PcapFile) error                            { return nil }
-func (n *NoopDb) CountFlows(bson.D) (int64, error)                        { return 0, nil }
-func (n *NoopDb) AddSignatureToFlow(db.FlowID, db.SuricataSig, int) error { return nil }
-func (n *NoopDb) GetFingerprints(ctx context.Context) ([]int, error)      { return nil, nil }
-func (n *NoopDb) InsertTags(tags []string) error                          { return nil }
-func (n *NoopDb) InsertFlows(context.Context, []db.FlowEntry) error       { return nil }
+func (n *NoopDb) ConfigureDatabase() error                     { return nil }
+func (n *NoopDb) GetTagList(context.Context) ([]string, error) { return nil, nil }
+func (n *NoopDb) GetSignature(context.Context, string) (db.SuricataSig, error) {
+	return db.SuricataSig{}, nil
+}
+func (n *NoopDb) SetStar(context.Context, string, bool) error                  { return nil }
+func (n *NoopDb) GetFlowDetail(context.Context, string) (*db.FlowEntry, error) { return nil, nil }
+func (n *NoopDb) GetPcap(context.Context, string) (bool, db.PcapFile)          { return false, db.PcapFile{} }
+func (n *NoopDb) InsertPcap(context.Context, db.PcapFile) error                { return nil }
+func (n *NoopDb) CountFlows(context.Context, bson.D) (int64, error)            { return 0, nil }
+func (n *NoopDb) AddSignatureToFlow(context.Context, db.FlowID, db.SuricataSig, int) error {
+	return nil
+}
+func (n *NoopDb) GetFingerprints(ctx context.Context) ([]int, error) { return nil, nil }
+func (n *NoopDb) InsertTags(context.Context, []string) error         { return nil }
+func (n *NoopDb) InsertFlows(context.Context, []db.FlowEntry) error  { return nil }
 func (n *NoopDb) GetFlows(context.Context, *db.FindFlowsOptions) ([]db.FlowEntry, error) {
 	return nil, nil
 }
-func (n *NoopDb) AddTagsToFlow(db.FlowID, []string, int) error { return nil }
+func (n *NoopDb) AddTagsToFlow(context.Context, db.FlowID, []string, int) error { return nil }
 func (n *NoopDb) GetSignaturesBatch(context.Context, []string) ([]db.SuricataSig, error) {
 	return nil, nil
 }

@@ -90,7 +90,7 @@ func addTools(mcpServ *server.MCPServer, database db.Database) {
 			mcp.WithDescription("List all unique tags used in flows"),
 		),
 		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			tags, err := database.GetTagList()
+			tags, err := database.GetTagList(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list tags: %v", err)
 			}
@@ -131,7 +131,7 @@ func addTools(mcpServ *server.MCPServer, database db.Database) {
 			}
 			// Optionally add time range filtering if your schema supports it
 
-			count, err := database.CountFlows(filters)
+			count, err := database.CountFlows(ctx, filters)
 			if err != nil {
 				return nil, fmt.Errorf("failed to count flows: %v", err)
 			}
@@ -215,7 +215,7 @@ func addTools(mcpServ *server.MCPServer, database db.Database) {
 				return mcp.NewToolResultError("flow_id is required"), nil
 			}
 
-			flow, err := database.GetFlowDetail(flowID)
+			flow, err := database.GetFlowDetail(ctx, flowID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch flow: %v", err)
 			}

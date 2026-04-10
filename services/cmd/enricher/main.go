@@ -177,12 +177,12 @@ func handleEveLine(json string, tagFlowbits bool) (stop bool, error error) {
 			Action: sigAction.String(),
 			Tag:    tag,
 		}
-		err := gDb.AddSignatureToFlow(id, sig, WINDOW)
+		err := gDb.AddSignatureToFlow(context.Background(), id, sig, WINDOW)
 		if err != nil {
 			return false, fmt.Errorf("failed to add signature to flow: %w", err)
 		}
 
-		err = gDb.AddSignatureToFlow(id_rev, sig, WINDOW)
+		err = gDb.AddSignatureToFlow(context.Background(), id_rev, sig, WINDOW)
 		if err != nil {
 			return false, fmt.Errorf("failed to add signature to flow: %w", err)
 		}
@@ -199,16 +199,16 @@ func handleEveLine(json string, tagFlowbits bool) (stop bool, error error) {
 	})
 
 	// Add tags to tag collection
-	err := gDb.InsertTags(tags)
+	err := gDb.InsertTags(context.Background(), tags)
 	if err != nil {
 		return false, fmt.Errorf("failed to insert tags: %w", err)
 	}
 
-	err = gDb.AddTagsToFlow(id, tags, WINDOW)
+	err = gDb.AddTagsToFlow(context.Background(), id, tags, WINDOW)
 	if err != nil {
 		return false, fmt.Errorf("failed to add tags to flow: %w", err)
 	}
-	err = gDb.AddTagsToFlow(id_rev, tags, WINDOW)
+	err = gDb.AddTagsToFlow(context.Background(), id_rev, tags, WINDOW)
 	if err != nil {
 		return false, fmt.Errorf("failed to add tags to reverse flow: %w", err)
 	}

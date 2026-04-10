@@ -176,7 +176,7 @@ func (a *Service) ProcessPacketSrc(ctx context.Context, src *gopacket.PacketSour
 			"finished", finished,
 		)
 
-		err := a.DB.InsertPcap(db.PcapFile{
+		err := a.DB.InsertPcap(ctx, db.PcapFile{
 			FileName: sourceName,
 			Position: position,
 			Finished: finished,
@@ -271,7 +271,7 @@ func (a *Service) FlushConnections() {
 
 // checkProcessedCount returns the count of already processed packets for a given file.
 func (a *Service) checkProcessedCount(fname string) int64 {
-	exists, file := a.DB.GetPcap(fname)
+	exists, file := a.DB.GetPcap(context.Background(), fname)
 	if exists {
 		return file.Position
 	}

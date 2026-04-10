@@ -109,29 +109,29 @@ type Database interface {
 	// Insert multiple flows into the database
 	InsertFlows(ctx context.Context, flows []FlowEntry) error
 	// Count the number of flows matching the given filters
-	CountFlows(filters bson.D) (int64, error)
+	CountFlows(ctx context.Context, filters bson.D) (int64, error)
 	// Set or unset the "starred" tag on a flow
-	SetStar(id string, star bool) error
+	SetStar(ctx context.Context, id string, star bool) error
 	// Get detailed flow information by ID
-	GetFlowDetail(id string) (*FlowEntry, error)
+	GetFlowDetail(ctx context.Context, id string) (*FlowEntry, error)
 	// Get a list of all tags
-	GetTagList() ([]string, error)
+	GetTagList(ctx context.Context) ([]string, error)
 	// Retrieve a Suricata signature by its ID, which can be an integer or ObjectID string.
-	GetSignature(id string) (SuricataSig, error)
+	GetSignature(ctx context.Context, id string) (SuricataSig, error)
 	// Retrieve multiple Suricata signatures by their ObjectID strings in a single query.
 	GetSignaturesBatch(ctx context.Context, ids []string) ([]SuricataSig, error)
 	// Retrieve a PCAP by its URI, returning whether it exists
-	GetPcap(uri string) (bool, PcapFile)
+	GetPcap(ctx context.Context, uri string) (bool, PcapFile)
 	// Insert a new pcap file metadata into the database, updating if it already exists.
-	InsertPcap(file PcapFile) error
+	InsertPcap(ctx context.Context, file PcapFile) error
 	// Set up the database with initial tags and indexes
 	ConfigureDatabase() error
 	// Associates a Suricata signature with a flow
-	AddSignatureToFlow(flow FlowID, sig SuricataSig, window int) error
+	AddSignatureToFlow(ctx context.Context, flow FlowID, sig SuricataSig, window int) error
 	//
-	InsertTags(tags []string) error
+	InsertTags(ctx context.Context, tags []string) error
 	//
-	AddTagsToFlow(flow FlowID, tags []string, window int) error
+	AddTagsToFlow(ctx context.Context, flow FlowID, tags []string, window int) error
 
 	// New functions with context support
 

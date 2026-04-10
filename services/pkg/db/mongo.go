@@ -53,18 +53,18 @@ func NewMongoDatabase(ctx context.Context, uri string) (Database, error) {
 }
 
 // GetTagList returns all tag names (_id) from the tags collection
-func (db *mongoDb) GetTagList() ([]string, error) {
-	cur, err := db.tagsColl.Find(context.TODO(), bson.M{})
+func (db *mongoDb) GetTagList(ctx context.Context) ([]string, error) {
+	cur, err := db.tagsColl.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to find tags: %v", err)
 	}
-	defer cur.Close(context.TODO())
+	defer cur.Close(ctx)
 
 	tags := make([]string, 0)
 	var tag struct {
 		ID string `bson:"_id"`
 	}
-	for cur.Next(context.TODO()) {
+	for cur.Next(ctx) {
 		if err := cur.Decode(&tag); err == nil {
 			tags = append(tags, tag.ID)
 		}
@@ -73,8 +73,8 @@ func (db *mongoDb) GetTagList() ([]string, error) {
 }
 
 // CountFlows returns the number of flows matching the given filters.
-func (db *mongoDb) CountFlows(filters bson.D) (int64, error) {
-	return db.flowColl.CountDocuments(context.TODO(), filters)
+func (db *mongoDb) CountFlows(ctx context.Context, filters bson.D) (int64, error) {
+	return db.flowColl.CountDocuments(ctx, filters)
 }
 
 // GetSignature returns a signature document by its integer ID or ObjectID string
@@ -99,7 +99,7 @@ func (db *mongoDb) GetSignaturesBatch(ctx context.Context, ids []string) ([]Suri
 	return results, nil
 }
 
-func (db *mongoDb) GetSignature(id string) (SuricataSig, error) {
+func (db *mongoDb) GetSignature(ctx context.Context, id string) (SuricataSig, error) {
 	var result SuricataSig
 	var filter bson.M
 
@@ -117,12 +117,12 @@ func (db *mongoDb) GetSignature(id string) (SuricataSig, error) {
 		filter = bson.M{"id": idInt}
 	}
 
-	err = db.signatureColl.FindOne(context.TODO(), filter).Decode(&result)
+	err = db.signatureColl.FindOne(ctx, filter).Decode(&result)
 	return result, err
 }
 
 // SetStar sets or unsets the "starred" tag on a flow
-func (db *mongoDb) SetStar(flowId string, star bool) error {
+func (db *mongoDb) SetStar(ctx context.Context, flowId string, star bool) error {
 	collection := db.client.Database("pcap").Collection("pcap")
 	objID, err := primitive.ObjectIDFromHex(flowId)
 	if err != nil {
@@ -134,19 +134,19 @@ func (db *mongoDb) SetStar(flowId string, star bool) error {
 	} else {
 		update = bson.M{"$pull": bson.M{"tags": "starred"}}
 	}
-	_, err = collection.UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
+	_, err = collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
 	return err
 }
 
 // GetFlowDetail returns a flow by its ObjectID string
-func (db *mongoDb) GetFlowDetail(id string) (*FlowEntry, error) {
+func (db *mongoDb) GetFlowDetail(ctx context.Context, id string) (*FlowEntry, error) {
 	collection := db.client.Database("pcap").Collection("pcap")
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, err
 	}
 	var flow FlowEntry
-	if err := collection.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&flow); err != nil {
+	if err := collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&flow); err != nil {
 		return nil, err
 	}
 
@@ -154,7 +154,7 @@ func (db *mongoDb) GetFlowDetail(id string) (*FlowEntry, error) {
 }
 
 func (db *mongoDb) ConfigureDatabase() error {
-	err := db.InsertTags([]string{
+	err := db.InsertTags(context.Background(), []string{
 		"flag-in",
 		"flag-out",
 		"blocked",
@@ -228,23 +228,23 @@ func (db mongoDb) InsertFlows(ctx context.Context, flows []FlowEntry) error {
 
 // Insert a new pcap uri, returns true if the pcap was not present yet,
 // otherwise returns false
-func (db *mongoDb) InsertPcap(pcap PcapFile) error {
+func (db *mongoDb) InsertPcap(ctx context.Context, pcap PcapFile) error {
 	files := db.client.Database("pcap").Collection("filesImported")
 
 	// it could already be present, so let's update it
 	filter := bson.M{"file_name": pcap.FileName}
 
-	_, err := files.ReplaceOne(context.TODO(), filter, pcap, options.Replace().SetUpsert(true))
+	_, err := files.ReplaceOne(ctx, filter, pcap, options.Replace().SetUpsert(true))
 	if err != nil {
 		return fmt.Errorf("error occurred while inserting pcap file: %v", err)
 	}
 	return nil
 }
 
-func (db mongoDb) GetPcap(uri string) (bool, PcapFile) {
+func (db mongoDb) GetPcap(ctx context.Context, uri string) (bool, PcapFile) {
 	files := db.client.Database("pcap").Collection("filesImported")
 
-	cur := files.FindOne(context.TODO(), bson.M{"file_name": uri})
+	cur := files.FindOne(ctx, bson.M{"file_name": uri})
 
 	var result PcapFile
 	err := cur.Decode(&result)
@@ -271,7 +271,7 @@ func (db mongoDb) AddSignature(ctx context.Context, sig SuricataSig) (primitive.
 	}
 
 	var existingSig SuricataSig
-	err := sigCollection.FindOne(context.TODO(), query).Decode(&existingSig)
+	err := sigCollection.FindOne(ctx, query).Decode(&existingSig)
 	if err == nil {
 		// Signature exists, return its MongoDB ID
 		return existingSig.MongoID, nil
@@ -282,7 +282,7 @@ func (db mongoDb) AddSignature(ctx context.Context, sig SuricataSig) (primitive.
 	}
 
 	// Signature does not exist, insert it
-	res, err := sigCollection.InsertOne(context.TODO(), sig)
+	res, err := sigCollection.InsertOne(ctx, sig)
 	if err != nil {
 		return primitive.ObjectID{}, fmt.Errorf("failed to insert signature: %v", err)
 	}
@@ -312,9 +312,9 @@ func flowIdFilter(flow FlowID, window int) bson.M {
 }
 
 // AddSignatureToFlow adds a signature to a flow, updating the flow's tags and blocked status if necessary.
-func (db *mongoDb) AddSignatureToFlow(flow FlowID, sig SuricataSig, window int) error {
+func (db *mongoDb) AddSignatureToFlow(ctx context.Context, flow FlowID, sig SuricataSig, window int) error {
 	// Add the signature to the collection
-	sigObjectId, err := db.AddSignature(context.TODO(), sig)
+	sigObjectId, err := db.AddSignature(ctx, sig)
 	if err != nil {
 		return fmt.Errorf("failed to add signature: %v", err)
 	}
@@ -324,7 +324,7 @@ func (db *mongoDb) AddSignatureToFlow(flow FlowID, sig SuricataSig, window int) 
 	tags := []string{"suricata"}
 	// Add tag from the signature if it contained one
 	if sig.Tag != "" {
-		err := db.InsertTag(sig.Tag)
+		err := db.InsertTag(ctx, sig.Tag)
 		if err != nil {
 			return fmt.Errorf("failed to insert tag: %v", err)
 		}
@@ -357,7 +357,7 @@ func (db *mongoDb) AddSignatureToFlow(flow FlowID, sig SuricataSig, window int) 
 	}
 
 	flowCollection := db.client.Database("pcap").Collection("pcap")
-	res, err := flowCollection.UpdateOne(context.TODO(), filter, update)
+	res, err := flowCollection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update flow: %v", err)
 	} else if res.MatchedCount == 0 {
@@ -369,7 +369,7 @@ func (db *mongoDb) AddSignatureToFlow(flow FlowID, sig SuricataSig, window int) 
 }
 
 // AddTagsToFlow adds tags to a flow, without duplicating existing tags.
-func (db *mongoDb) AddTagsToFlow(flow FlowID, tags []string, window int) error {
+func (db *mongoDb) AddTagsToFlow(ctx context.Context, flow FlowID, tags []string, window int) error {
 	filter := flowIdFilter(flow, window)
 
 	// Update this flow with the tags
@@ -379,7 +379,7 @@ func (db *mongoDb) AddTagsToFlow(flow FlowID, tags []string, window int) error {
 
 	// Apply update to database
 	flowCollection := db.client.Database("pcap").Collection("pcap")
-	res, err := flowCollection.UpdateOne(context.TODO(), filter, update)
+	res, err := flowCollection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return fmt.Errorf("failed to update flow: %v", err)
 	} else if res.MatchedCount == 0 {
@@ -389,7 +389,7 @@ func (db *mongoDb) AddTagsToFlow(flow FlowID, tags []string, window int) error {
 	return nil
 }
 
-func (db *mongoDb) InsertTags(tags []string) error {
+func (db *mongoDb) InsertTags(ctx context.Context, tags []string) error {
 	tagCollection := db.client.Database("pcap").Collection("tags")
 
 	docs := make([]any, len(tags))
@@ -400,15 +400,15 @@ func (db *mongoDb) InsertTags(tags []string) error {
 	// Insert all tags at once, ignoring duplicates (and ignoring error too, since we don't care about existing tags)
 	// SetOrdered(false) allows MongoDB to continue inserting other documents even if one fails
 	// TODO: handle this better?
-	_, _ = tagCollection.InsertMany(context.TODO(), docs, options.InsertMany().SetOrdered(false))
+	_, _ = tagCollection.InsertMany(ctx, docs, options.InsertMany().SetOrdered(false))
 	return nil
 }
 
-func (db *mongoDb) InsertTag(tag string) error {
+func (db *mongoDb) InsertTag(ctx context.Context, tag string) error {
 	tagCollection := db.client.Database("pcap").Collection("tags")
 	// we ignore the error here, since we don't care if the tag already exists
 	// TODO: handle this better?
-	_, _ = tagCollection.InsertOne(context.TODO(), bson.M{"_id": tag})
+	_, _ = tagCollection.InsertOne(ctx, bson.M{"_id": tag})
 	return nil
 }
 
