@@ -30,8 +30,6 @@ export const tulipApi = createApi({
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        // TODO: fix the below tags mutation (make backend handle empty tags!)
-        // Diederik gives you a beer once this has been fixed
         body: JSON.stringify(query),
       }),
     }),

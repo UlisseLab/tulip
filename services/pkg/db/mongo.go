@@ -397,18 +397,21 @@ func (db *mongoDb) InsertTags(ctx context.Context, tags []string) error {
 		docs[i] = bson.M{"_id": tag}
 	}
 
-	// Insert all tags at once, ignoring duplicates (and ignoring error too, since we don't care about existing tags)
-	// SetOrdered(false) allows MongoDB to continue inserting other documents even if one fails
-	// TODO: handle this better?
-	_, _ = tagCollection.InsertMany(ctx, docs, options.InsertMany().SetOrdered(false))
+	// SetOrdered(false) lets MongoDB continue inserting even if some docs are duplicates.
+	// We only care about errors that are NOT duplicate key (E11000).
+	_, err := tagCollection.InsertMany(ctx, docs, options.InsertMany().SetOrdered(false))
+	if err != nil && !mongo.IsDuplicateKeyError(err) {
+		return fmt.Errorf("failed to insert tags: %w", err)
+	}
 	return nil
 }
 
 func (db *mongoDb) InsertTag(ctx context.Context, tag string) error {
 	tagCollection := db.client.Database("pcap").Collection("tags")
-	// we ignore the error here, since we don't care if the tag already exists
-	// TODO: handle this better?
-	_, _ = tagCollection.InsertOne(ctx, bson.M{"_id": tag})
+	_, err := tagCollection.InsertOne(ctx, bson.M{"_id": tag})
+	if err != nil && !mongo.IsDuplicateKeyError(err) {
+		return fmt.Errorf("failed to insert tag %q: %w", tag, err)
+	}
 	return nil
 }
 
