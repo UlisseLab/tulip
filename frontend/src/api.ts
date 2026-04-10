@@ -69,7 +69,10 @@ export const tulipApi = createApi({
       }),
     }),
     starFlow: builder.mutation<unknown, { id: string; star: boolean }>({
-      query: ({ id, star }) => `/star/${id}/${star ? "1" : "0"}`,
+      query: ({ id, star }) => ({
+        url: `/star/${id}/${star ? "1" : "0"}`,
+        method: "PATCH",
+      }),
     }),
     getFingerprints: builder.query<number[], void>({
       query: () => `/fingerprints`,

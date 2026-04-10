@@ -34,7 +34,7 @@ func (api *Router) RegisterRoutes(e *echo.Echo) {
 	e.GET("/tick_info", api.getTickInfo)
 	e.GET("/tags", api.getTags)
 	e.GET("/signature/:id", api.getSignature)
-	e.GET("/star/:flow_id/:star_to_set", api.setStar)
+	e.PATCH("/star/:flow_id/:star_to_set", api.setStar)
 	e.GET("/services", api.getServices)
 	e.GET("/flag_regex", api.getFlagRegex)
 	e.GET("/flow/:id", api.getFlowDetail)
