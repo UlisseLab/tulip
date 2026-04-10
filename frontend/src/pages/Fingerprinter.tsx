@@ -6,17 +6,20 @@ export function Fingerprinter() {
   const { id } = useParams();
 
   const idNumber = parseInt(id || "", 10);
-  if (isNaN(idNumber)) {
+  const isIdInvalid = isNaN(idNumber);
+
+  const { data, error, isLoading } = useGetFlowsQuery(
+    { fingerprints: [idNumber] },
+    { skip: isIdInvalid },
+  );
+
+  if (isIdInvalid) {
     return (
       <div className="flex justify-center items-center h-[60vh]">
         <span className="text-4xl font-bold text-red-500">Invalid ID</span>
       </div>
     );
   }
-
-  const { data, error, isLoading } = useGetFlowsQuery({
-    fingerprints: [idNumber],
-  });
 
   if (isLoading) {
     return (
@@ -48,7 +51,9 @@ export function Fingerprinter() {
 
   return (
     <div className="max-w-2xl mx-auto mt-10">
-      <h2 className="text-3xl font-bold mb-6 text-center">Timeline for Fingerprint {idNumber}</h2>
+      <h2 className="text-3xl font-bold mb-6 text-center">
+        Timeline for Fingerprint {idNumber}
+      </h2>
       <ol className="relative border-l-2 border-blue-500">
         {data.data.map((item, idx) => (
           <li key={item._id || idx} className="mb-10 ml-6">
