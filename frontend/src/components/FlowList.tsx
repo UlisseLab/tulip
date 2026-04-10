@@ -1,7 +1,8 @@
 import { useSearchParams, Link, useParams, useNavigate } from "react-router";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import type { Flow } from "../types";
+import type { TickInfo } from "../types";
 import {
   SERVICE_FILTER_KEY,
   TEXT_FILTER_KEY,
@@ -15,13 +16,12 @@ import {
 import {
   HeartIcon,
   AdjustmentsHorizontalIcon,
-  LinkIcon,
 } from "@heroicons/react/20/solid";
 import { HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 
 import { format } from "date-fns";
 import useDebounce from "../hooks/useDebounce";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { GroupedVirtuoso, type GroupedVirtuosoHandle } from "react-virtuoso";
 import classNames from "classnames";
 import { Tag } from "./Tag";
 import {
@@ -30,15 +30,45 @@ import {
   useGetServicesQuery,
   useGetTagsQuery,
   useStarFlowMutation,
+  useGetTickInfoQuery,
 } from "../api";
 import { useSearchParam } from "../store/param";
+
+type FilterTags = {
+  include: string[];
+  exclude: string[];
+};
+
+function computeGroups(
+  flows: Flow[],
+  tickInfo: TickInfo | undefined,
+): { groupCounts: number[]; groupLabels: string[] } {
+  if (!tickInfo || tickInfo.tickLength <= 0) {
+    return { groupCounts: [flows.length], groupLabels: ["Flows"] };
+  }
+  const start = new Date(tickInfo.startDate).getTime();
+  const counts: number[] = [];
+  const labels: string[] = [];
+  let lastTick: number | null = null;
+  for (const flow of flows) {
+    const tick = Math.floor((flow.time - start) / tickInfo.tickLength);
+    if (tick !== lastTick) {
+      counts.push(0);
+      labels.push(`Tick ${tick}`);
+      lastTick = tick;
+    }
+    counts[counts.length - 1]++;
+  }
+  return { groupCounts: counts, groupLabels: labels };
+}
 
 export function FlowList() {
   const [searchParams] = useSearchParams();
   const params = useParams();
 
-  // we add a local variable to prevent racing with the browser location API
-  let openedFlowID = params.id;
+  // we add a ref to prevent racing with the browser location API
+  const openedFlowID = useRef(params.id);
+  openedFlowID.current = params.id;
 
   // Infinite scroll state
   const PAGE_SIZE = 50;
@@ -48,6 +78,7 @@ export function FlowList() {
 
   const { data: availableTags } = useGetTagsQuery();
   const { data: services } = useGetServicesQuery();
+  const { data: tickInfo } = useGetTickInfoQuery();
 
   const [filterFlags] = useSearchParam<string[]>(
     FLAGS_FILTER_KEY,
@@ -61,11 +92,6 @@ export function FlowList() {
     (value) => (value.length === 0 ? null : JSON.stringify(value)),
     (value) => JSON.parse(value) as string[],
   );
-
-  type FilterTags = {
-    include: string[];
-    exclude: string[];
-  };
 
   const [filterTags, setFilterTags] = useSearchParam<FilterTags>(
     "tags",
@@ -105,7 +131,7 @@ export function FlowList() {
 
   const [flowIndex, setFlowIndex] = useState<number>(0);
 
-  const virtuoso = useRef<VirtuosoHandle>(null);
+  const virtuoso = useRef<GroupedVirtuosoHandle>(null);
 
   const [serviceName] = useSearchParam<string>(
     SERVICE_FILTER_KEY,
@@ -127,21 +153,35 @@ export function FlowList() {
   const debounced_text_filter = useDebounce(text_filter, 300);
 
   // Base query parameters
-  const baseQuery = {
-    "flow.data": debounced_text_filter,
-    dst_ip: service?.ip,
-    dst_port: service?.port,
-    from_time: from_filter_num,
-    to_time: to_filter_num,
-    service: service?.name ?? "",
-    tags: filterTags.include,
-    flags: filterFlags,
-    flagids: filterFlagids,
-    includeTags: filterTags.include,
-    excludeTags: filterTags.exclude,
-    limit: PAGE_SIZE,
-    offset: 0,
-  };
+  const baseQuery = useMemo(
+    () => ({
+      "flow.data": debounced_text_filter,
+      dst_ip: service?.ip,
+      dst_port: service?.port,
+      from_time: from_filter_num,
+      to_time: to_filter_num,
+      service: service?.name ?? "",
+      tags: filterTags.include,
+      flags: filterFlags,
+      flagids: filterFlagids,
+      includeTags: filterTags.include,
+      excludeTags: filterTags.exclude,
+      limit: PAGE_SIZE,
+      offset: 0,
+    }),
+    [
+      debounced_text_filter,
+      service?.ip,
+      service?.port,
+      service?.name,
+      from_filter_num,
+      to_filter_num,
+      filterTags.include,
+      filterTags.exclude,
+      filterFlags,
+      filterFlagids,
+    ],
+  );
 
   const {
     data: flowData,
@@ -193,8 +233,20 @@ export function FlowList() {
     }
   };
 
-  // Reset flows when filters change
-  useEffect(() => {
+  // Reset flows when filters change — using the "store info from previous renders"
+  // pattern to avoid calling setState inside useEffect.
+  const [prevFlowData, setPrevFlowData] = useState(flowData);
+  const [prevServices, setPrevServices] = useState(services);
+  const [prevIsLoading, setPrevIsLoading] = useState(isLoading);
+
+  if (
+    flowData !== prevFlowData ||
+    services !== prevServices ||
+    isLoading !== prevIsLoading
+  ) {
+    setPrevFlowData(flowData);
+    setPrevServices(services);
+    setPrevIsLoading(isLoading);
     if (flowData) {
       const transformed = flowData.data.map((flow) => ({
         ...flow,
@@ -206,13 +258,10 @@ export function FlowList() {
       setAllFlows(transformed);
       setHasMore(transformed.length < flowData.count);
     } else if (!isLoading) {
-      // Clear flows if no data and not loading
       setAllFlows([]);
       setHasMore(false);
     }
-  }, [flowData, services, isLoading]);
-
-  const transformedFlowData = allFlows;
+  }
 
   const onHeartHandler = async (flow: Flow) => {
     const isCurrentlyStarred = flow.tags.includes("starred");
@@ -237,6 +286,11 @@ export function FlowList() {
     }
   };
 
+  const { groupCounts, groupLabels } = useMemo(
+    () => computeGroups(allFlows, tickInfo),
+    [allFlows, tickInfo],
+  );
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -244,50 +298,35 @@ export function FlowList() {
       index: flowIndex,
       behavior: "auto",
       done: () => {
-        if (transformedFlowData && transformedFlowData[flowIndex ?? 0]) {
-          const idAtIndex = transformedFlowData[flowIndex ?? 0]._id;
+        if (allFlows[flowIndex]) {
+          const idAtIndex = allFlows[flowIndex]._id;
           // if the current flow ID at the index indeed did change (ie because of keyboard navigation), we need to update the URL as well as local ID
-          if (idAtIndex !== openedFlowID) {
+          if (idAtIndex !== openedFlowID.current) {
             navigate(`/flow/${idAtIndex}?${searchParams}`);
-            openedFlowID = idAtIndex;
+            openedFlowID.current = idAtIndex;
           }
         }
       },
     });
   }, [flowIndex]);
 
-  // TODO: there must be a better way to do this
-  // this gets called on every refetch, we dont want to iterate all flows on every refetch
-  // so because performance, we hack this by checking if the transformedFlowData length changed
-  const [transformedFlowDataLength, setTransformedFlowDataLength] =
-    useState<number>(0);
+  const prevAllFlowsLengthRef = useRef<number>(0);
 
-  useEffect(() => {
-    if (
-      transformedFlowData &&
-      transformedFlowDataLength != transformedFlowData?.length
-    ) {
-      setTransformedFlowDataLength(transformedFlowData?.length);
-
-      for (let i = 0; i < transformedFlowData?.length; i++) {
-        if (transformedFlowData[i]._id === openedFlowID) {
-          if (i !== flowIndex) {
-            setFlowIndex(i);
-          }
-          return;
-        }
-      }
-      setFlowIndex(0);
+  // Sync flowIndex when allFlows list changes length — using the "store info from
+  // previous renders" pattern to avoid calling setState inside useEffect.
+  if (allFlows.length !== prevAllFlowsLengthRef.current) {
+    prevAllFlowsLengthRef.current = allFlows.length;
+    const idx = allFlows.findIndex((f) => f._id === openedFlowID.current);
+    const nextIndex = idx >= 0 ? idx : 0;
+    if (nextIndex !== flowIndex) {
+      setFlowIndex(nextIndex);
     }
-  }, [transformedFlowData]);
+  }
 
   useHotkeys(
     "j",
-    () =>
-      setFlowIndex((fi) =>
-        Math.min((transformedFlowData?.length ?? 1) - 1, fi + 1),
-      ),
-    [transformedFlowData?.length],
+    () => setFlowIndex((fi) => Math.min((allFlows.length ?? 1) - 1, fi + 1)),
+    [allFlows.length],
   );
 
   useHotkeys("k", () => setFlowIndex((fi) => Math.max(0, fi - 1)));
@@ -329,7 +368,7 @@ export function FlowList() {
       }).unwrap();
 
       // Transform the data
-      const transformed = result.map((flow) => ({
+      const transformed = result.data.map((flow) => ({
         ...flow,
         service_tag:
           services?.find(
@@ -339,7 +378,7 @@ export function FlowList() {
 
       // Replace all flows with fresh data
       setAllFlows(transformed);
-      setHasMore(result.length === PAGE_SIZE);
+      setHasMore(transformed.length < result.count);
 
       // Reset flow selection to first item and scroll to top
       setFlowIndex(0);
@@ -373,14 +412,13 @@ export function FlowList() {
             <button
               type="button"
               className={classNames(
-                "flex-1 border border-gray-300 dark:border-gray-700 text-sm transition-colors cursor-pointer",
+                "m-0 border-r-0 flex-1 border border-gray-300 dark:border-gray-700 text-sm transition-colors cursor-pointer",
                 "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-blue-200 dark:hover:bg-blue-900 flex items-center justify-center gap-2",
                 { "opacity-70": manualLoading },
               )}
               onClick={handleManualRefresh}
               title="Refresh flows"
               disabled={manualLoading}
-              style={{ margin: 0, borderRight: "none" }}
             >
               {manualLoading ? (
                 <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></span>
@@ -444,11 +482,17 @@ export function FlowList() {
               </span>
             </div>
           )}
-          <Virtuoso
+          <GroupedVirtuoso
             className={classNames(["flex", "flex-col", "flex-1"], {
               "sidebar-loading": isLoading,
             })}
-            data={transformedFlowData}
+            groupCounts={groupCounts}
+            groupContent={(groupIndex) => (
+              <div className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 border-y border-blue-200 dark:border-blue-800 sticky top-0 shadow-sm">
+                {groupLabels[groupIndex]}
+              </div>
+            )}
+            data={allFlows}
             ref={virtuoso}
             initialTopMostItemIndex={flowIndex}
             endReached={() => {
@@ -456,16 +500,17 @@ export function FlowList() {
                 loadMoreFlows();
               }
             }}
-            itemContent={(index, flow) => (
+            itemContent={(index, _groupIndex, flow) => (
               <FlowListEntry
                 key={flow._id}
                 flow={flow}
                 onClick={() => setFlowIndex(index)}
-                isActive={flow._id === openedFlowID}
+                isActive={flow._id === openedFlowID.current}
                 onHeartClick={onHeartHandler}
               />
             )}
             components={{
+              // eslint-disable-next-line @eslint-react/no-nested-component-definitions
               Footer: () => {
                 if (isLoadingMore) {
                   return (
@@ -477,7 +522,7 @@ export function FlowList() {
                     </div>
                   );
                 }
-                if (!hasMore && transformedFlowData.length > 0) {
+                if (!hasMore && allFlows.length > 0) {
                   return (
                     <div className="flex items-center justify-center py-4">
                       <span className="text-gray-500 dark:text-gray-300">
