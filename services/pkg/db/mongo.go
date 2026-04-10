@@ -120,6 +120,27 @@ func (db *mongoDb) CountFlows(filters bson.D) (int64, error) {
 }
 
 // GetSignature returns a signature document by its integer ID or ObjectID string
+func (db *mongoDb) GetSignaturesBatch(ctx context.Context, ids []string) ([]SuricataSig, error) {
+	objIDs := make([]primitive.ObjectID, 0, len(ids))
+	for _, id := range ids {
+		if objID, err := primitive.ObjectIDFromHex(id); err == nil {
+			objIDs = append(objIDs, objID)
+		}
+	}
+	var results []SuricataSig
+	if len(objIDs) == 0 {
+		return results, nil
+	}
+	cursor, err := db.signatureColl.Find(ctx, bson.M{"_id": bson.M{"$in": objIDs}})
+	if err != nil {
+		return nil, err
+	}
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
 func (db *mongoDb) GetSignature(id string) (SuricataSig, error) {
 	var result SuricataSig
 	var filter bson.M

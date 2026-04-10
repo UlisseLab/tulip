@@ -118,6 +118,8 @@ type Database interface {
 	GetTagList() ([]string, error)
 	// Retrieve a Suricata signature by its ID, which can be an integer or ObjectID string.
 	GetSignature(id string) (SuricataSig, error)
+	// Retrieve multiple Suricata signatures by their ObjectID strings in a single query.
+	GetSignaturesBatch(ctx context.Context, ids []string) ([]SuricataSig, error)
 	// Retrieve a PCAP by its URI, returning whether it exists
 	GetPcap(uri string) (bool, PcapFile)
 	// Insert a new pcap file metadata into the database, updating if it already exists.

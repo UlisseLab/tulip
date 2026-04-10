@@ -35,6 +35,9 @@ func (n *NoopDb) GetFlows(context.Context, *db.FindFlowsOptions) ([]db.FlowEntry
 	return nil, nil
 }
 func (n *NoopDb) AddTagsToFlow(db.FlowID, []string, int) error { return nil }
+func (n *NoopDb) GetSignaturesBatch(context.Context, []string) ([]db.SuricataSig, error) {
+	return nil, nil
+}
 
 func makeTestAssembler(t *testing.T) *Service {
 	t.Helper()

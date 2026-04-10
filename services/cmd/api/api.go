@@ -250,6 +250,30 @@ func (api *Router) query(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	// Collect all unique signature IDs across all flows for a single batch query.
+	allSigIDs := make([]string, 0)
+	sigIDSeen := make(map[string]bool)
+	for _, flow := range results {
+		for _, sigID := range flow.Suricata {
+			if !sigIDSeen[sigID] {
+				sigIDSeen[sigID] = true
+				allSigIDs = append(allSigIDs, sigID)
+			}
+		}
+	}
+	sigMap := make(map[string]db.SuricataSig, len(allSigIDs))
+	if len(allSigIDs) > 0 {
+		sigs, err := api.DB.GetSignaturesBatch(c.Request().Context(), allSigIDs)
+		if err != nil {
+			slog.Error("Failed to fetch signatures", slog.Any("err", err))
+			return c.JSON(http.StatusInternalServerError,
+				apiError{"Could not fetch signatures. See server logs for details."})
+		}
+		for _, sig := range sigs {
+			sigMap[sig.MongoID.Hex()] = sig
+		}
+	}
+
 	apiResults := make([]apiFlowEntry, len(results))
 	for i, flow := range results {
 		res := apiFlowEntry{
@@ -273,13 +297,9 @@ func (api *Router) query(c echo.Context) error {
 
 		res.Signatures = make([]db.SuricataSig, 0, len(flow.Suricata))
 		for _, sigID := range flow.Suricata {
-			sig, err := api.DB.GetSignature(sigID)
-			if err != nil {
-				slog.Error("Failed to fetch signature", slog.String("id", sigID), slog.Any("err", err))
-				return c.JSON(http.StatusInternalServerError,
-					apiError{"Could not fetch signature. See server logs for details."})
+			if sig, ok := sigMap[sigID]; ok {
+				res.Signatures = append(res.Signatures, sig)
 			}
-			res.Signatures = append(res.Signatures, sig)
 		}
 
 		apiResults[i] = res
