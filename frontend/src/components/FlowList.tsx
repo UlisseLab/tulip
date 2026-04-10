@@ -67,8 +67,8 @@ export function FlowList() {
   const params = useParams();
 
   // we add a ref to prevent racing with the browser location API
-  const openedFlowID = useRef(params.id);
-  openedFlowID.current = params.id;
+  const openedFlowIdRef = useRef(params.id);
+  openedFlowIdRef.current = params.id;
 
   // Infinite scroll state
   const PAGE_SIZE = 50;
@@ -131,7 +131,7 @@ export function FlowList() {
 
   const [flowIndex, setFlowIndex] = useState<number>(0);
 
-  const virtuoso = useRef<GroupedVirtuosoHandle>(null);
+  const virtuosoRef = useRef<GroupedVirtuosoHandle>(null);
 
   const [serviceName] = useSearchParam<string>(
     SERVICE_FILTER_KEY,
@@ -294,21 +294,21 @@ export function FlowList() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    virtuoso?.current?.scrollIntoView({
+    virtuosoRef?.current?.scrollIntoView({
       index: flowIndex,
       behavior: "auto",
       done: () => {
         if (allFlows[flowIndex]) {
           const idAtIndex = allFlows[flowIndex]._id;
           // if the current flow ID at the index indeed did change (ie because of keyboard navigation), we need to update the URL as well as local ID
-          if (idAtIndex !== openedFlowID.current) {
+          if (idAtIndex !== openedFlowIdRef.current) {
             navigate(`/flow/${idAtIndex}?${searchParams}`);
-            openedFlowID.current = idAtIndex;
+            openedFlowIdRef.current = idAtIndex;
           }
         }
       },
     });
-  }, [flowIndex]);
+  }, [allFlows, flowIndex, navigate, searchParams]);
 
   const prevAllFlowsLengthRef = useRef<number>(0);
 
@@ -316,7 +316,7 @@ export function FlowList() {
   // previous renders" pattern to avoid calling setState inside useEffect.
   if (allFlows.length !== prevAllFlowsLengthRef.current) {
     prevAllFlowsLengthRef.current = allFlows.length;
-    const idx = allFlows.findIndex((f) => f._id === openedFlowID.current);
+    const idx = allFlows.findIndex((f) => f._id === openedFlowIdRef.current);
     const nextIndex = idx >= 0 ? idx : 0;
     if (nextIndex !== flowIndex) {
       setFlowIndex(nextIndex);
@@ -382,7 +382,7 @@ export function FlowList() {
 
       // Reset flow selection to first item and scroll to top
       setFlowIndex(0);
-      virtuoso?.current?.scrollToIndex({
+      virtuosoRef?.current?.scrollToIndex({
         index: 0,
         behavior: "auto",
       });
@@ -493,7 +493,7 @@ export function FlowList() {
               </div>
             )}
             data={allFlows}
-            ref={virtuoso}
+            ref={virtuosoRef}
             initialTopMostItemIndex={flowIndex}
             endReached={() => {
               if (hasMore && !isLoadingMore && !isLoading) {
@@ -505,7 +505,7 @@ export function FlowList() {
                 key={flow._id}
                 flow={flow}
                 onClick={() => setFlowIndex(index)}
-                isActive={flow._id === openedFlowID.current}
+                isActive={flow._id === openedFlowIdRef.current}
                 onHeartClick={onHeartHandler}
               />
             )}
