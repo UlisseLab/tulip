@@ -6,7 +6,6 @@ import type {
   FullFlow,
   Signature,
   TickInfo,
-  Flow,
   FlowsQuery,
   FlowsResponse,
 } from "./types";
