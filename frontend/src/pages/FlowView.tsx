@@ -780,8 +780,8 @@ function FlowFingerprintTimeline({
         <div className="text-red-500 dark:text-red-400">
           Error fetching related flows
         </div>
-      ) : relatedFlows && relatedFlows.length > 0 ? (
-        renderTimeline(relatedFlows)
+      ) : relatedFlows?.data && relatedFlows.data.length > 0 ? (
+        renderTimeline(relatedFlows.data)
       ) : (
         <div className="text-gray-500 dark:text-gray-400">
           No related flows found.

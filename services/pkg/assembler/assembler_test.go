@@ -29,6 +29,9 @@ func (n *NoopDb) GetFlowDetail(context.Context, string) (*db.FlowEntry, error) {
 func (n *NoopDb) GetPcap(context.Context, string) (bool, db.PcapFile)          { return false, db.PcapFile{} }
 func (n *NoopDb) InsertPcap(context.Context, db.PcapFile) error                { return nil }
 func (n *NoopDb) CountFlows(context.Context, bson.D) (int64, error)            { return 0, nil }
+func (n *NoopDb) CountFlowsByOpts(context.Context, *db.FindFlowsOptions) (int64, error) {
+	return 0, nil
+}
 func (n *NoopDb) AddSignatureToFlow(context.Context, db.FlowID, db.SuricataSig, int) error {
 	return nil
 }

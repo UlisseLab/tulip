@@ -57,7 +57,7 @@ function FingerprintSection({ fingerprint }: { fingerprint: number }) {
     );
   }
 
-  if (!flows || flows.length === 0) {
+  if (!flows || !flows.data || flows.data.length === 0) {
     return (
       <section
         key={fingerprint}
@@ -80,12 +80,12 @@ function FingerprintSection({ fingerprint }: { fingerprint: number }) {
           {fingerprint}
         </span>
         <span className="ml-2 bg-blue-100 dark:bg-blue-900 dark:text-blue-200 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded">
-          {flows.length} flow{flows.length !== 1 ? "s" : ""}
+          {flows.data.length} flow{flows.data.length !== 1 ? "s" : ""}
         </span>
       </div>
       <div>
         <ul className="space-y-1">
-          {flows.slice(0, 5).map((flow, idx: number) => (
+          {flows.data.slice(0, 5).map((flow, idx: number) => (
             <li key={flow._id || idx}>
               Flow
               <Link

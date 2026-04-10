@@ -99,7 +99,7 @@ export function Corrie() {
 
   // TODO: fix the below transformation - move it to server
   // Diederik gives you a beer once it has been fixed
-  const transformedFlowData = flowData?.map((flow) => ({
+  const transformedFlowData = flowData?.data.map((flow) => ({
     ...flow,
     service_tag:
       services?.find((s) => s.ip === flow.dst_ip && s.port === flow.dst_port)

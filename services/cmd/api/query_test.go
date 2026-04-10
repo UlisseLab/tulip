@@ -35,6 +35,9 @@ func (m *mockDB) GetSignaturesBatch(ctx context.Context, ids []string) ([]db.Sur
 }
 func (m *mockDB) InsertFlows(context.Context, []db.FlowEntry) error            { return nil }
 func (m *mockDB) CountFlows(context.Context, bson.D) (int64, error)            { return 0, nil }
+func (m *mockDB) CountFlowsByOpts(context.Context, *db.FindFlowsOptions) (int64, error) {
+	return 0, nil
+}
 func (m *mockDB) SetStar(context.Context, string, bool) error                  { return nil }
 func (m *mockDB) GetFlowDetail(context.Context, string) (*db.FlowEntry, error) { return nil, nil }
 func (m *mockDB) GetTagList(context.Context) ([]string, error)                 { return nil, nil }
@@ -108,7 +111,7 @@ func TestQueryExcludeTagsForwarded(t *testing.T) {
 	assert.Equal(t, []string{"starred"}, mdb.lastOpts.ExcludeTags)
 }
 
-// TestQueryResponseIsJSON verifies that /query always returns a JSON array.
+// TestQueryResponseIsJSON verifies that /query returns a paginated JSON envelope.
 func TestQueryResponseIsJSON(t *testing.T) {
 	mdb := &mockDB{}
 	router := newTestRouter(mdb)
@@ -116,7 +119,12 @@ func TestQueryResponseIsJSON(t *testing.T) {
 	rec := doQuery(t, router, `{}`)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	var result []json.RawMessage
+	var result struct {
+		Data         []json.RawMessage `json:"data"`
+		Page         int               `json:"page"`
+		Count        int64             `json:"count"`
+		ItemsPerPage int               `json:"items_per_page"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &result))
 }
 

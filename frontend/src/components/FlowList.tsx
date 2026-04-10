@@ -157,12 +157,12 @@ export function FlowList() {
         offset: allFlows.length,
       }).unwrap();
 
-      if (result.length < PAGE_SIZE) {
+      if (allFlows.length + result.data.length >= result.count) {
         setHasMore(false);
       }
 
       // Transform new flows with service tags
-      const transformedNewFlows = result.map((flow) => ({
+      const transformedNewFlows = result.data.map((flow) => ({
         ...flow,
         service_tag:
           services?.find(
@@ -188,7 +188,7 @@ export function FlowList() {
   // Reset flows when filters change
   useEffect(() => {
     if (flowData) {
-      const transformed = flowData.map((flow) => ({
+      const transformed = flowData.data.map((flow) => ({
         ...flow,
         service_tag:
           services?.find(
@@ -196,7 +196,7 @@ export function FlowList() {
           )?.name ?? "unknown",
       }));
       setAllFlows(transformed);
-      setHasMore(flowData.length === PAGE_SIZE);
+      setHasMore(transformed.length < flowData.count);
     } else if (!isLoading) {
       // Clear flows if no data and not loading
       setAllFlows([]);

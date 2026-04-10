@@ -110,6 +110,8 @@ type Database interface {
 	InsertFlows(ctx context.Context, flows []FlowEntry) error
 	// Count the number of flows matching the given filters
 	CountFlows(ctx context.Context, filters bson.D) (int64, error)
+	// Count the number of flows matching the given FindFlowsOptions (same filter logic as GetFlows)
+	CountFlowsByOpts(ctx context.Context, opts *FindFlowsOptions) (int64, error)
 	// Set or unset the "starred" tag on a flow
 	SetStar(ctx context.Context, id string, star bool) error
 	// Get detailed flow information by ID

@@ -59,6 +59,13 @@ export type FlowsQuery = {
   fingerprints?: number[];
 };
 
+export type FlowsResponse = {
+  data: Flow[];
+  page: number;
+  count: number;
+  items_per_page: number;
+};
+
 export type Service = {
   ip: string;
   port: number;

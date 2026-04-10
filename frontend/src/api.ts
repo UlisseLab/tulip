@@ -8,6 +8,7 @@ import type {
   TickInfo,
   Flow,
   FlowsQuery,
+  FlowsResponse,
 } from "./types";
 
 export const tulipApi = createApi({
@@ -22,7 +23,7 @@ export const tulipApi = createApi({
     getFlow: builder.query<FullFlow, string>({
       query: (id) => `/flow/${id}`,
     }),
-    getFlows: builder.query<Flow[], FlowsQuery>({
+    getFlows: builder.query<FlowsResponse, FlowsQuery>({
       query: (query) => ({
         url: `/query`,
         method: "POST",

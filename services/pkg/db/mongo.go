@@ -419,9 +419,66 @@ func (db mongoDb) GetLastFlows(ctx context.Context, limit int) ([]FlowEntry, err
 	return db.GetFlows(ctx, &FindFlowsOptions{Limit: limit})
 }
 
+// buildFlowQuery constructs the MongoDB filter document from FindFlowsOptions.
+// It is shared by GetFlows and CountFlowsByOpts to ensure identical filter semantics.
+func buildFlowQuery(opts *FindFlowsOptions) bson.M {
+	query := bson.M{}
+	if opts == nil {
+		return query
+	}
+
+	timeQuery := bson.M{}
+	if opts.FromTime > 0 {
+		timeQuery["$gte"] = opts.FromTime
+	}
+	if opts.ToTime > 0 {
+		timeQuery["$lt"] = opts.ToTime
+	}
+	if len(timeQuery) > 0 {
+		query["time"] = timeQuery
+	}
+
+	if opts.DstPort > 0 {
+		query["dst_port"] = opts.DstPort
+	}
+	if opts.DstIp != "" {
+		query["dst_ip"] = opts.DstIp
+	}
+	if opts.SrcPort > 0 {
+		query["src_port"] = opts.SrcPort
+	}
+	if opts.SrcIp != "" {
+		query["src_ip"] = opts.SrcIp
+	}
+
+	tagQueries := bson.M{}
+	if len(opts.IncludeTags) > 0 {
+		tagQueries["$all"] = opts.IncludeTags
+	}
+	if len(opts.ExcludeTags) > 0 {
+		tagQueries["$nin"] = opts.ExcludeTags
+	}
+	if len(tagQueries) > 0 {
+		query["tags"] = tagQueries
+	}
+
+	if opts.FlowData != "" {
+		query["flow.data"] = bson.M{"$regex": opts.FlowData, "$options": "i"}
+	}
+
+	if len(opts.Fingerprints) > 0 {
+		query["fingerprints"] = bson.M{"$in": opts.Fingerprints}
+	}
+
+	return query
+}
+
+func (db mongoDb) CountFlowsByOpts(ctx context.Context, opts *FindFlowsOptions) (int64, error) {
+	return db.flowColl.CountDocuments(ctx, buildFlowQuery(opts))
+}
+
 func (db mongoDb) GetFlows(ctx context.Context, opts *FindFlowsOptions) ([]FlowEntry, error) {
 	collection := db.client.Database("pcap").Collection("pcap")
-	query := bson.M{}
 
 	findOpts := options.Find().SetSort(bson.M{"time": -1})
 
@@ -429,67 +486,18 @@ func (db mongoDb) GetFlows(ctx context.Context, opts *FindFlowsOptions) ([]FlowE
 		if opts.Limit > 0 {
 			findOpts.SetLimit(int64(opts.Limit))
 		} else {
-			findOpts.SetLimit(100) // Default limit if not specified
+			findOpts.SetLimit(100)
 		}
-
 		if opts.Offset > 0 {
 			findOpts.SetSkip(int64(opts.Offset))
 		}
-
-		timeQuery := bson.M{}
-		if opts.FromTime > 0 {
-			timeQuery["$gte"] = opts.FromTime
-		}
-		if opts.ToTime > 0 {
-			timeQuery["$lt"] = opts.ToTime
-		}
-
-		if len(timeQuery) > 0 {
-			query["time"] = timeQuery
-		}
-
-		if opts.DstPort > 0 {
-			query["dst_port"] = opts.DstPort
-		}
-		if opts.DstIp != "" {
-			query["dst_ip"] = opts.DstIp
-		}
-		if opts.SrcPort > 0 {
-			query["src_port"] = opts.SrcPort
-		}
-		if opts.SrcIp != "" {
-			query["src_ip"] = opts.SrcIp
-		}
-
-		tagQueries := bson.M{}
-		if len(opts.IncludeTags) > 0 {
-			tagQueries["$all"] = opts.IncludeTags
-		}
-		if len(opts.ExcludeTags) > 0 {
-			tagQueries["$nin"] = opts.ExcludeTags
-		}
-		if len(tagQueries) > 0 {
-			query["tags"] = tagQueries
-		}
-
-		if opts.FlowData != "" {
-			// Corretto: cerca la regex su tutti i campi 'data' dentro l'array 'flow'
-			query["flow.data"] = bson.M{"$regex": opts.FlowData, "$options": "i"} // Case-insensitive regex match
-		}
-
-		if len(opts.Fingerprints) > 0 {
-			// search for fingerprints in the flow.fingerprints array
-			query["fingerprints"] = bson.M{"$in": opts.Fingerprints}
-		}
 	}
 
-	cur, err := collection.Find(ctx, query, findOpts)
+	cur, err := collection.Find(ctx, buildFlowQuery(opts), findOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find flows: %v", err)
 	}
-	defer func() {
-
-	}()
+	defer func() {}()
 
 	var results []FlowEntry
 	err = cur.All(ctx, &results)

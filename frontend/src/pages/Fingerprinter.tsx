@@ -36,7 +36,7 @@ export function Fingerprinter() {
     );
   }
 
-  if (!data || !Array.isArray(data) || data.length === 0) {
+  if (!data || !data.data || data.data.length === 0) {
     return (
       <div className="flex justify-center items-center h-[60vh]">
         <span className="text-2xl font-semibold text-gray-500">
@@ -50,7 +50,7 @@ export function Fingerprinter() {
     <div className="max-w-2xl mx-auto mt-10">
       <h2 className="text-3xl font-bold mb-6 text-center">Timeline for Fingerprint {idNumber}</h2>
       <ol className="relative border-l-2 border-blue-500">
-        {data.map((item, idx) => (
+        {data.data.map((item, idx) => (
           <li key={item._id || idx} className="mb-10 ml-6">
             <Link
               to={`/flow/${item._id}`}

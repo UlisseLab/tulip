@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"tulip/pkg/db"
 
 	"github.com/labstack/echo/v4"
@@ -250,6 +251,16 @@ func (api *Router) query(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
+	// Count total matching flows in parallel with signature fetching.
+	var totalCount int64
+	var countErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		totalCount, countErr = api.DB.CountFlowsByOpts(c.Request().Context(), opts)
+	}()
+
 	// Collect all unique signature IDs across all flows for a single batch query.
 	allSigIDs := make([]string, 0)
 	sigIDSeen := make(map[string]bool)
@@ -305,7 +316,23 @@ func (api *Router) query(c echo.Context) error {
 		apiResults[i] = res
 	}
 
-	return c.JSON(http.StatusOK, apiResults)
+	wg.Wait()
+	if countErr != nil {
+		slog.Error("Failed to count flows", slog.Any("err", countErr))
+		return c.JSON(http.StatusInternalServerError, apiError{"Could not count flows. See server logs for details."})
+	}
+
+	page := 1
+	if opts.Limit > 0 {
+		page = opts.Offset/opts.Limit + 1
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"data":           apiResults,
+		"page":           page,
+		"count":          totalCount,
+		"items_per_page": opts.Limit,
+	})
 }
 
 func (api *Router) getTags(c echo.Context) error {
