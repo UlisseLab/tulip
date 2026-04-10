@@ -8,9 +8,9 @@ import {
   START_FILTER_KEY,
   END_FILTER_KEY,
   FLOW_LIST_REFETCH_INTERVAL_MS,
+  FLAGS_FILTER_KEY,
+  FLAGIDS_FILTER_KEY,
 } from "../const";
-import { useAppSelector, useAppDispatch } from "../store";
-import { toggleFilterTag } from "../store/filter";
 
 import {
   HeartIcon,
@@ -49,8 +49,18 @@ export function FlowList() {
   const { data: availableTags } = useGetTagsQuery();
   const { data: services } = useGetServicesQuery();
 
-  const filterFlags = useAppSelector((state) => state.filter.filterFlags);
-  const filterFlagids = useAppSelector((state) => state.filter.filterFlagids);
+  const [filterFlags] = useSearchParam<string[]>(
+    FLAGS_FILTER_KEY,
+    [],
+    (value) => (value.length === 0 ? null : JSON.stringify(value)),
+    (value) => JSON.parse(value) as string[],
+  );
+  const [filterFlagids] = useSearchParam<string[]>(
+    FLAGIDS_FILTER_KEY,
+    [],
+    (value) => (value.length === 0 ? null : JSON.stringify(value)),
+    (value) => JSON.parse(value) as string[],
+  );
 
   type FilterTags = {
     include: string[];
@@ -90,8 +100,6 @@ export function FlowList() {
       });
     }
   };
-
-  const dispatch = useAppDispatch();
 
   const [starFlow] = useStarFlowMutation();
 
@@ -289,10 +297,10 @@ export function FlowList() {
     () => {
       setShowFilters(true);
       if ((availableTags ?? []).includes("flag-in")) {
-        dispatch(toggleFilterTag("flag-in"));
+        onTagClick("flag-in");
       }
     },
-    [availableTags],
+    [availableTags, onTagClick],
   );
 
   useHotkeys(
@@ -300,10 +308,10 @@ export function FlowList() {
     () => {
       setShowFilters(true);
       if ((availableTags ?? []).includes("flag-out")) {
-        dispatch(toggleFilterTag("flag-out"));
+        onTagClick("flag-out");
       }
     },
-    [availableTags],
+    [availableTags, onTagClick],
   );
   useHotkeys("r", () => refetch());
 

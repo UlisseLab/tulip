@@ -7,6 +7,9 @@ export const END_FILTER_KEY = "end";
 export const FIRST_DIFF_KEY = "first";
 export const SECOND_DIFF_KEY = "second";
 export const CORRELATION_MODE_KEY = "correlation";
+export const TAGS_FILTER_KEY = "tags";
+export const FLAGS_FILTER_KEY = "flags";
+export const FLAGIDS_FILTER_KEY = "flagids";
 
 export const SERVICE_REFETCH_INTERVAL_MS = 15000;
 export const TICK_REFETCH_INTERVAL_MS = 10000;

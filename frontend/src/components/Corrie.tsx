@@ -8,13 +8,16 @@ import {
   END_FILTER_KEY,
   CORRELATION_MODE_KEY,
   FLOW_LIST_REFETCH_INTERVAL_MS,
+  TAGS_FILTER_KEY,
+  FLAGS_FILTER_KEY,
+  FLAGIDS_FILTER_KEY,
 } from "../const";
 import useDebounce from "../hooks/useDebounce";
 
 import ReactApexChart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { useGetFlowsQuery, useGetServicesQuery } from "../api";
-import { useAppSelector } from "../store";
+import { useSearchParam } from "../store/param";
 
 interface GraphProps {
   flowList: Flow[];
@@ -56,11 +59,30 @@ function DeferredChart({ children }: { children: React.ReactNode }) {
 
 export function Corrie() {
   const { data: services } = useGetServicesQuery();
-  const includeTags = useAppSelector((state) => state.filter.includeTags);
-  const excludeTags = useAppSelector((state) => state.filter.excludeTags);
-  const filterTags = useAppSelector((state) => state.filter.filterTags);
-  const filterFlags = useAppSelector((state) => state.filter.filterFlags);
-  const filterFlagids = useAppSelector((state) => state.filter.filterFlagids);
+
+  type FilterTags = { include: string[]; exclude: string[] };
+  const [filterTags] = useSearchParam<FilterTags>(
+    TAGS_FILTER_KEY,
+    { include: [], exclude: [] },
+    (value) =>
+      value.include.length === 0 && value.exclude.length === 0
+        ? null
+        : JSON.stringify(value),
+    (value) => JSON.parse(value) as FilterTags,
+  );
+
+  const [filterFlags] = useSearchParam<string[]>(
+    FLAGS_FILTER_KEY,
+    [],
+    (value) => (value.length === 0 ? null : JSON.stringify(value)),
+    (value) => JSON.parse(value) as string[],
+  );
+  const [filterFlagids] = useSearchParam<string[]>(
+    FLAGIDS_FILTER_KEY,
+    [],
+    (value) => (value.length === 0 ? null : JSON.stringify(value)),
+    (value) => JSON.parse(value) as string[],
+  );
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -85,9 +107,9 @@ export function Corrie() {
       from_time: from_filter_num,
       to_time: to_filter_num,
       service: "", // FIXME
-      includeTags: includeTags,
-      excludeTags: excludeTags,
-      tags: filterTags,
+      includeTags: filterTags.include,
+      excludeTags: filterTags.exclude,
+      tags: filterTags.include,
       flags: filterFlags,
       flagids: filterFlagids,
     },
