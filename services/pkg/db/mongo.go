@@ -13,9 +13,7 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
-	"slices"
 	"strconv"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -56,61 +54,21 @@ func NewMongoDatabase(ctx context.Context, uri string) (Database, error) {
 
 // GetTagList returns all tag names (_id) from the tags collection
 func (db *mongoDb) GetTagList() ([]string, error) {
-
 	cur, err := db.tagsColl.Find(context.TODO(), bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to find tags: %v", err)
 	}
+	defer cur.Close(context.TODO())
 
 	tags := make([]string, 0)
 	var tag struct {
 		ID string `bson:"_id"`
 	}
-
 	for cur.Next(context.TODO()) {
 		if err := cur.Decode(&tag); err == nil {
 			tags = append(tags, tag.ID)
 		}
 	}
-
-	err = cur.Close(context.TODO())
-	if err != nil {
-		log.Printf("Failed to close cursor: %v", err)
-	}
-
-	pipeline := mongo.Pipeline{
-		{{Key: "$unwind", Value: "$tags"}},
-		{{Key: "$group", Value: bson.D{
-			{Key: "_id", Value: nil},
-			{Key: "uniqueTags", Value: bson.D{{Key: "$addToSet", Value: "$tags"}}},
-		}}},
-		{{Key: "$project", Value: bson.D{
-			{Key: "_id", Value: 0},
-			{Key: "uniqueTags", Value: 1},
-		}}},
-	}
-
-	tagsCur, err := db.flowColl.Aggregate(context.TODO(), pipeline)
-	if err != nil {
-		return nil, fmt.Errorf("failed to aggregate tags: %v", err)
-	}
-
-	var aggResult []struct {
-		UniqueTags []string `bson:"uniqueTags"`
-	}
-	if err := tagsCur.All(context.TODO(), &aggResult); err != nil {
-		return nil, fmt.Errorf("failed to decode aggregation result: %v", err)
-	}
-
-	// Add unique tags from aggregation result
-	if len(aggResult) != 0 {
-		for _, tag := range aggResult[0].UniqueTags {
-			if !slices.Contains(tags, tag) {
-				tags = append(tags, tag)
-			}
-		}
-	}
-
 	return tags, nil
 }
 
