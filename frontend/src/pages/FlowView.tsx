@@ -534,6 +534,7 @@ export function FlowView() {
     data: flow,
     isError,
     isLoading,
+    isFetching,
   } = useGetFlowQuery(id!, { skip: id === undefined });
 
   const [triggerPwnToolsQuery] = useLazyToPwnToolsQuery();
@@ -605,12 +606,12 @@ export function FlowView() {
     if (currentFlow < 0) {
       return;
     }
-    document.getElementById(`${id}`)?.scrollIntoView(true);
+    document.getElementById(`${id}-${currentFlow}`)?.scrollIntoView(true);
   }, [currentFlow]);
 
   if (isError) {
     return (
-      <div className="w-full h-full flex  justify-center items-center">
+      <div className="w-full h-full flex justify-center items-center">
         <div>
           <h2 className="text-3xl font-bold mb-4">Error</h2>
           <p className="text-red-500 text-lg mb-2">
@@ -627,7 +628,7 @@ export function FlowView() {
     );
   }
 
-  if (isLoading || flow == undefined) {
+  if (isLoading || isFetching) {
     return (
       <div className="w-full h-full flex justify-center items-center">
         <div>
@@ -639,8 +640,26 @@ export function FlowView() {
     );
   }
 
+  if (flow == null) {
+    return (
+      <div className="w-full h-full flex justify-center items-center">
+        <div>
+          <h2 className="text-3xl font-bold mb-4">Flow not found</h2>
+          <p className="text-gray-500 text-lg mb-2">No flow found with id:</p>
+          <code className="font-mono border border-gray-300 p-2 w-full block">
+            {id}
+          </code>
+          <p className="text-gray-500 mt-4">
+            Please check the id and try again.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
+      {/* Secondary navbar with copy buttons */}
       <div
         className="sticky shadow-md top-0 bg-white overflow-auto border-b border-b-gray-300 flex z-100 dark:bg-gray-800 dark:border-gray-600"
         style={{ height: SECONDARY_NAVBAR_HEIGHT }}
@@ -664,25 +683,21 @@ export function FlowView() {
         </div>
       </div>
 
+      {/* Main content with flow overview and flow data */}
       <div key={flow._id}>
-        {flow && <FlowOverview flow={flow}></FlowOverview>}
+        <FlowOverview flow={flow}></FlowOverview>
 
-        {(flow?.fingerprints?.length ?? 0) > 0 && (
+        {flow.fingerprints.length > 0 && (
           <FlowFingerprintTimeline
             id={flow._id}
             fingerprints={flow.fingerprints}
           ></FlowFingerprintTimeline>
         )}
 
-        {flow?.flow.map((flow_data, i, a) => {
+        {flow.flow.map((flow_data, i, a) => {
           const delta_time = a[i].time - (a[i - 1]?.time ?? a[i].time);
-          // Use a more stable key than index: use flow_data.time + flow_data.from + i as fallback
-          const key =
-            flow_data &&
-            typeof flow_data.time !== "undefined" &&
-            typeof flow_data.from !== "undefined"
-              ? `${flow_data.time}-${flow_data.from}`
-              : `${flow._id}-${i}`;
+          const key = `${flow._id}-${flow_data.time}-${flow_data.from}`;
+
           return (
             <Flow
               flow={flow_data}
