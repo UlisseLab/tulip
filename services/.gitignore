@@ -108,3 +108,13 @@ venv.bak/
 .mypy_cache/
 
 workspace.xml
+
+# Go compiled binaries and artifacts
+/api
+/mcp
+/enricher
+/assembler
+/ingestor
+*.test
+*.out
+

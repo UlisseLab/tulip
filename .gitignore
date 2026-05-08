@@ -140,3 +140,6 @@ workspace.xml
 .idea
 
 /traffic
+
+# nginx basic auth credentials (do not commit)
+/nginx/.htpasswd

@@ -343,18 +343,40 @@ func (api *Router) downloadFile(c echo.Context) error {
 			"Internal error: could not resolve traffic_dir. Contact the administrator.")
 	}
 
-	// Ensure requested file is within trafficDir
+	// Fast-path boundary check to avoid leaking existence of arbitrary files outside traffic_dir.
+	// (Symlinks are handled below as a second check.)
 	if !isSubPath(absPath, trafficDirAbs) {
 		return c.String(http.StatusBadRequest, "Invalid 'file': 'file' was not in a subdirectory of traffic_dir")
 	}
 
+	trafficDirReal, err := filepath.EvalSymlinks(trafficDirAbs)
+	if err != nil {
+		return c.String(http.StatusInternalServerError,
+			"Internal error: could not resolve traffic_dir. Contact the administrator.")
+	}
+
 	// Check if the file exists
-	_, err = os.Stat(absPath)
+	stat, err := os.Stat(absPath)
+	if err != nil {
+		return c.String(http.StatusNotFound, "Invalid 'file': 'file' not found")
+	}
+	if stat.IsDir() {
+		return c.String(http.StatusBadRequest, "Invalid 'file': is a directory")
+	}
+
+	// Resolve symlinks before enforcing the trafficDir boundary.
+	// This prevents serving files that live outside trafficDir via a symlink inside trafficDir.
+	absPathReal, err := filepath.EvalSymlinks(absPath)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Invalid 'file': 'file' not found")
 	}
 
-	return c.File(absPath) // This will write the file to the response
+	// Ensure requested file is within trafficDir
+	if !isSubPath(absPathReal, trafficDirReal) {
+		return c.String(http.StatusBadRequest, "Invalid 'file': 'file' was not in a subdirectory of traffic_dir")
+	}
+
+	return c.File(absPathReal) // This will write the file to the response
 }
 
 func (a *Router) getFingerprints(c echo.Context) error {
@@ -476,6 +498,8 @@ func validateRequestMethod(method string) (string, error) {
 func renderPythonRequest(headers map[string]string, data any, method, path, dataParam string, useSession bool, port int) string {
 	var b strings.Builder
 	b.WriteString("\n")
+	pathJson, _ := json.Marshal(path)
+	b.WriteString(fmt.Sprintf("req_path = %s\n", string(pathJson)))
 	if useSession {
 		b.WriteString("s.headers = ")
 	} else {
@@ -489,9 +513,9 @@ func renderPythonRequest(headers map[string]string, data any, method, path, data
 	b.WriteString(string(dataJson))
 	b.WriteString("\n")
 	if useSession {
-		b.WriteString(fmt.Sprintf("s.%s(f\"http://{{host}}:%d%s\", %s=data)\n", method, port, path, dataParam))
+		b.WriteString(fmt.Sprintf("s.%s(f\"http://{host}:%d{req_path}\", %s=data)\n", method, port, dataParam))
 	} else {
-		b.WriteString(fmt.Sprintf("requests.%s(f\"http://{{host}}:%d%s\", %s=data, headers=headers)\n", method, port, path, dataParam))
+		b.WriteString(fmt.Sprintf("requests.%s(f\"http://{host}:%d{req_path}\", %s=data, headers=headers)\n", method, port, dataParam))
 	}
 	return b.String()
 }
@@ -539,5 +563,10 @@ func isSubPath(sub, base string) bool {
 	if err != nil {
 		return false
 	}
-	return rel == "." || (len(rel) > 0 && rel[0] != '.')
+	if rel == "." {
+		return true
+	}
+	rel = filepath.Clean(rel)
+	sep := string(os.PathSeparator)
+	return rel != ".." && !strings.HasPrefix(rel, ".."+sep)
 }

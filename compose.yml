@@ -13,8 +13,6 @@ services:
     build: frontend
     image: tulip-frontend:latest
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     depends_on:
       - mongo
       - api
@@ -65,7 +63,7 @@ services:
       target: ingestor
     restart: unless-stopped
     ports:
-      - "${INGESTOR_ADDR}:9999"
+      - "${INGESTOR_ADDR}:9999" # TODO: close it to the whole network 
     volumes:
       - ${TRAFFIC_DIR}:/traffic
     environment:
@@ -91,8 +89,6 @@ services:
     restart: unless-stopped
     depends_on:
       - mongo
-    ports:
-      - "8080:8080"
     environment:
       MONGO_HOST: mongo:27017
 
@@ -136,6 +132,18 @@ services:
       FLAGID_COLLECTION: flagids
       FLAGID_URL: ${FLAGID_URL}
       FLAGID_FETCH_INTERVAL: 60
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - mcp
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
 
 volumes:
   mongo_data:
