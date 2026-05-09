@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strconv"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -465,7 +466,7 @@ func buildFlowQuery(opts *FindFlowsOptions) bson.M {
 	}
 
 	if opts.FlowData != "" {
-		query["flow.data"] = bson.M{"$regex": opts.FlowData, "$options": "i"}
+		query["flow.data"] = bson.M{"$regex": regexp.QuoteMeta(opts.FlowData), "$options": "i"}
 	}
 
 	if len(opts.Fingerprints) > 0 {

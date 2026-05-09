@@ -42,7 +42,7 @@ and then configure your MCP client:
   "mcpServers": {
     "mcp-proxy": {
       "command": "mcp-proxy",
-      "args": ["--transport=streamablehttp", "http://localhost:8080/mcp"]
+      "args": ["--transport=streamablehttp", "http://localhost/mcp/"]
     }
   }
 }
@@ -130,6 +130,38 @@ Originally, Tulip was based on the [flower](https://github.com/secgroup/flower),
 ## Security
 
 Your Tulip instance will probably contain sensitive CTF information, like flags stolen from your machines. If you expose it to the internet and other people find it, you risk losing additional flags. It is recommended to host it on an internal network (for instance behind a VPN) or to put Tulip behind some form of authentication.
+
+### Protecting Tulip with an nginx reverse proxy (Basic Auth)
+
+The repository includes an optional nginx reverse proxy configuration that protects externally-exposed services with HTTP Basic Auth. The proxy configuration and an htpasswd example are located in `nginx/`:
+
+- `nginx/default.conf` — nginx config that proxies `/` to the frontend and `/mcp/` to the MCP server and enforces basic auth.
+- `nginx/.htpasswd.example` — example and instructions for creating a real `.htpasswd` file. Do not commit real credentials.
+
+To enable the proxy locally:
+
+1. Generate an htpasswd file on the host (example uses user `tulip`):
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install -y apache2-utils
+htpasswd -c ./nginx/.htpasswd tulip
+
+# or on RHEL/CentOS
+sudo yum install -y httpd-tools
+htpasswd -c ./nginx/.htpasswd tulip
+```
+
+2. Start the stack (the compose file will start the nginx proxy on host port 80):
+
+```bash
+docker compose up -d --build
+```
+
+Notes:
+- `nginx/.htpasswd` must exist on the host and should not be committed to the repository.
+- The compose configuration exposes `nginx` on port 80 and proxies requests to the internal `frontend` and `mcp` services. Services previously bound to host ports are now reachable only through the proxy.
+- If you need HTTPS in front of `nginx`, consider terminating TLS at the proxy using a certificate (Let's Encrypt, ACME, or a self-signed cert) and mounting the certs into the container. I can add an example `docker-compose` TLS setup if you want.
 
 ## Contributing
 
